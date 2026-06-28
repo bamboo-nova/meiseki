@@ -1,2 +1,181 @@
 # meiseki
-Claude Code plugin that strips away complex syntax from Japanese documents written by AI and rewrites them into text that can be understood at a glance.
+
+**AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直す Claude Code プラグイン。**
+
+`meiseki`（明晰）＝澄んで分かること。目的は **明晰さ（clarity）= 内容を知らない読者が一度読んで正しく理解できること** だけ。
+文章の声・立場・個性は足さない。一般論を「自分は」という意見に書き換えて主体性を注入する `stop-ai-slop-jp` 系とは
+**逆方向**で、声を足さず中立な明晰さに振る。
+
+## 何を直すか
+
+日本語ネイティブでも読解負荷の高い**構文**を対象にする（難しい語彙ではなく構文が読みにくさの原因）。
+
+- 二重否定（litotes）/ 否定・条件の入れ子
+- 長い連体修飾 / 主語‐述語の距離 / 一文への詰め込み
+- 「の」の連鎖 / 過剰な名詞化・漢語
+- 冗長・空虚な表現（「することができます」など）
+- 太字＋コロンの箇条書き乱用などの過剰な体裁
+- 一文に埋もれた 3 項目以上の同格列挙（箇条書きに開く）
+
+**対象**：技術記事・README・設計書・社内ドキュメント・ブログの説明文。
+**対象外**：コード本体・SNS の短文・小説や詩などの創作・法務／医療／論文の厳密文。
+
+## アーキテクチャ（二層構成）
+
+```
+入力: 日本語ドキュメント（原稿）
+        │
+        ▼
+[meiseki スキル / LLM オーケストレーター]
+        │
+        ├──▶ textlint（Bash 実行・決定論層）
+        │       二重否定・一文長・読点過多・連続漢字・冗長 などを
+        │       行/列つきの機械可読(JSON)で検出 → 読解負荷スコア(before)
+        │
+        └──▶ パターンカタログ A–F（LLM 判断層）
+                textlint では取れない構文を担当：
+                長い連体修飾・「の」連鎖・名詞化・列挙の箇条書き化(F)
+        │
+        ▼
+   リライト → textlint 再実行で before→after を検算
+        │
+        ▼
+出力: 明晰化した本文のみ（＋任意で読解負荷スコア）
+```
+
+- **検出と採点は textlint（決定論層）**、**リライトはスキル（LLM 層）**に分ける。
+- textlint で取れない構文（連体修飾・「の」連鎖・一般の名詞化・列挙）を LLM が担う。
+  **この「textlint で取れない部分」が、単なる textlint 設定と meiseki の差**になる。
+- MCP サーバーは持たない。textlint は Bash で呼ぶ。
+
+## ディレクトリ構成
+
+```
+meiseki/
+├── .claude-plugin/
+│   ├── plugin.json          # プラグインマニフェスト
+│   └── marketplace.json     # 配布メタデータ（marketplace: bamboo-nova-ja-tools）
+├── skills/
+│   └── meiseki/
+│       ├── SKILL.md         # LLM オーケストレーター本体
+│       └── references/
+│           └── patterns.md  # 高負荷構文カタログ A–F
+├── .textlintrc.json         # 読解負荷に効くルールだけに絞った textlint 設定
+├── package.json             # textlint と技術文書プリセットへの依存
+└── README.md
+```
+
+## インストール
+
+```bash
+# 依存の取得（textlint を使うため必須）
+cd meiseki && npm install
+
+# 導通確認
+npx textlint --version
+```
+
+### Claude Code へ読み込む
+
+`claude plugin install` は**マーケットプレイスに登録されたプラグイン名**を取る（パスは取らない）。
+そのため `claude plugin install ./meiseki` や `claude plugin install .` は失敗する。正しくは、
+まず同梱の `.claude-plugin/marketplace.json` をマーケットプレイスとして登録し、その名前で install する。
+
+```bash
+# 1. このプラグインのマーケットプレイス(.claude-plugin/marketplace.json)を登録
+claude plugin marketplace add ./meiseki
+
+# 2. 「プラグイン名@マーケットプレイス名」で install
+claude plugin install meiseki@bamboo-nova-ja-tools
+```
+
+開発中にインストールせず一時的に読み込むだけなら、こちらが手軽：
+
+```bash
+claude --plugin-dir ./meiseki
+```
+
+> マニフェストの検証は `claude plugin validate ./meiseki` で行える。
+
+### サプライチェーン対策：7日間の cooldown
+
+`meiseki/.npmrc` に `min-release-age=7` を設定しているため、**公開から 7 日未満のバージョンはインストールされません**。
+侵害された npm パッケージは公開後まもなく発覚・unpublish されることが多く、「枯れた」バージョンだけを採用することで
+リスク窓を避けます（npm 11.5+ 標準の機能。内部的には `before = now − 7日` として解決されます）。
+
+- 期間を変えたい場合は `.npmrc` の数値を増減する。
+- 一時的に無効化して最新を入れたいときは `npm install --min-release-age=0`。
+- `npm config get min-release-age` は常に `null` を返すが、これは npm が内部で `before` に変換するための仕様で、cooldown 自体は有効。
+  動作確認するなら `npm install <pkg> --min-release-age=3000 --dry-run` で古いバージョンに解決されることを見るとよい。
+- 既存の `package-lock.json` に固定済みのバージョンは（`npm ci` では）そのまま使われる。cooldown は新規解決・更新時に効く。
+
+## 使い方
+
+対象の日本語をスキルに渡すだけ。発動例：
+
+- 「この README を読みやすく直して」
+- 「この説明文、AIっぽいので明晰化して」
+- 「冗長な日本語を削って一読で分かるようにして」
+
+標準ではリライト後の**本文のみ**が返る。`「どこを直したか教えて」`と指定すると変更点も添える。
+`「スコアも出して」`と指定すると読解負荷スコア(before→after)を併記する。
+
+## `.textlintrc.json` のルール意図（差別化の肝）
+
+フルプリセットは表記ゆれ・感嘆符・カタカナ長音など**読解負荷と無関係なルール**まで効いて「整えすぎ」になる。
+meiseki は**読解負荷に効くルールだけ**を残し、それ以外を `false` で外している。
+
+| 有効化（true） | 役割 |
+|---|---|
+| `no-double-negative-ja` | 二重否定（最優先カテゴリ A） |
+| `sentence-length` (max 90) | 一文長（B） |
+| `max-ten` (max 3) | 読点過多（B） |
+| `max-kanji-continuous-len` (max 6) | 連続漢字＝漢語の重さ（C） |
+| `ja-no-redundant-expression` | 冗長表現「することができる」等（C/D） |
+| `no-doubled-joshi` (min_interval 1) | 助詞の重複（B） |
+| `no-doubled-conjunction` | 接続詞の重複（D） |
+| `no-doubled-conjunctive-particle-ga` | 逆接「が」の連続＝詰め込みの合図（B） |
+| `ja-no-weak-phrase` | 弱い表現（D。※立場を強める方向には使わない） |
+
+無効化（false）：`arabic-kanji-numbers`, `no-mix-dearu-desumasu`, `ja-no-mixed-period`,
+`no-dropping-the-ra`, `no-exclamation-question-mark`, `no-nfd`。
+
+> **プリセット追従の注意**：`textlint-rule-preset-ja-technical-writing` のルールキーやデフォルト値は
+> バージョンで変わりうる。`npm install` 後にプリセットの README で現行のルール一覧を確認し、
+> 上記キーが存在するか・キー名が一致するかを点検すること。読解負荷と無関係な同梱ルールが増えていたら、
+> 同様に `false` で外す。
+
+## 読解負荷スコア（RLS）
+
+```
+RLS = Σ(カテゴリ件数 × 重み) ÷ 本文の文数 × 100   （低いほど読みやすい）
+```
+
+| カテゴリ | textlint ルール | 重み |
+|---|---|---|
+| A 否定の入れ子（最優先） | `no-double-negative-ja` | 3 |
+| B 距離・長さ | `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga` | 2 |
+| C 漢語・名詞化 | `max-kanji-continuous-len`, `ja-no-redundant-expression` | 2 |
+| D 冗長・空虚 | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase` | 1 |
+| E 体裁 | （LLM 判断） | 1 |
+| F 構造化（列挙） | （LLM 判断） | 1 |
+
+**受け入れ基準：after < before を必須、A（二重否定）は原則 0 件。** 意図的な litotes だけ例外。
+
+## 受け入れ基準チェックリスト
+
+- [ ] 出力は本文のみ（分析・見出し・講評が付いていない）
+- [ ] 冒頭の一般論（「近年〜」）が削られている
+- [ ] 「することができます」→「できます」になっている
+- [ ] 「〜の〜の〜」の連鎖がほどけている
+- [ ] 長い連体修飾が分割され、主語‐述語が近い
+- [ ] **二重否定が論理を反転させずに畳まれている**（例「招かないとは言えません」→「負荷が増えることがある」。「増えない」は誤訳＝不合格）
+- [ ] 敬体／常体が維持されている
+- [ ] API 名・固有名詞・数値が変わっていない
+- [ ] 元から平易な文を不要に作り替えていない
+- [ ] **声・立場が注入されていない**（「自分は」等の意見や、言い切りの強調が足されていない）
+- [ ] textlint 再実行で読解負荷スコアが before より下がっている（A は 0 件）
+
+## ライセンス
+
+MIT

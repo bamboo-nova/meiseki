@@ -1,0 +1,19 @@
+{
+  "name": "meiseki",
+  "version": "0.1.0",
+  "description": "AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直すプラグイン。声・個性は足さず、明晰さだけを目的とする。",
+  "author": {
+    "name": "bamboo-nova"
+  },
+  "skills": [
+    "./skills"
+  ],
+  "keywords": [
+    "japanese",
+    "clarity",
+    "readability",
+    "textlint",
+    "rewrite",
+    "ai-slop"
+  ]
+}

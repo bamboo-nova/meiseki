@@ -1,0 +1,23 @@
+{
+  "name": "bamboo-nova-ja-tools",
+  "description": "日本語ドキュメントの明晰化・推敲を支援する Claude Code プラグイン群のマーケットプレイス。",
+  "owner": {
+    "name": "bamboo-nova"
+  },
+  "plugins": [
+    {
+      "name": "meiseki",
+      "source": "./",
+      "version": "0.1.0",
+      "description": "AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直すプラグイン。声・個性は足さず、明晰さだけを目的とする。",
+      "keywords": [
+        "japanese",
+        "clarity",
+        "readability",
+        "textlint",
+        "rewrite",
+        "ai-slop"
+      ]
+    }
+  ]
+}

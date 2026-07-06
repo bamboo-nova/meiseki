@@ -2,12 +2,8 @@
   "name": "meiseki",
   "version": "0.1.0",
   "private": true,
-  "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトするプラグインの決定論層。",
+  "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトする Agent Skill の決定論層。",
   "scripts": {
-    "lint": "textlint -c .textlintrc.json -f json"
-  },
-  "devDependencies": {
-    "textlint": "^14.0.0",
-    "textlint-rule-preset-ja-technical-writing": "^10.0.0"
+    "lint": "npx --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 textlint -c skills/meiseki/references/textlint.config.json -f json"
   }
 }

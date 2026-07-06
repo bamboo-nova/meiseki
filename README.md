@@ -1,6 +1,6 @@
 # meiseki
 
-**AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直す Claude Code プラグイン。**
+**AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直す Agent Skill。**
 
 `meiseki`（明晰）＝澄んで分かること。目的は **明晰さ（clarity）= 内容を知らない読者が一度読んで正しく理解できること** だけ。
 文章の声・立場・個性は足さない。一般論を「自分は」という意見に書き換えて主体性を注入する `stop-ai-slop-jp` 系とは
@@ -28,7 +28,7 @@
         ▼
 [meiseki スキル / LLM オーケストレーター]
         │
-        ├──▶ textlint（Bash 実行・決定論層）
+        ├──▶ textlint（npx 実行・決定論層）
         │       二重否定・一文長・読点過多・連続漢字・冗長 などを
         │       行/列つきの機械可読(JSON)で検出 → 読解負荷スコア(before)
         │
@@ -46,36 +46,38 @@
 - **検出と採点は textlint（決定論層）**、**リライトはスキル（LLM 層）**に分ける。
 - textlint で取れない構文（連体修飾・「の」連鎖・一般の名詞化・列挙）を LLM が担う。
   **この「textlint で取れない部分」が、単なる textlint 設定と meiseki の差**になる。
-- MCP サーバーは持たない。textlint は Bash で呼ぶ。
+- MCP サーバーは持たない。textlint は Node.js 同梱の `npx` で呼ぶ。
 
 ## ディレクトリ構成
 
 ```
 meiseki/
-├── .claude-plugin/
-│   ├── plugin.json          # プラグインマニフェスト
-│   └── marketplace.json     # 配布メタデータ（marketplace: bamboo-nova-ja-tools）
+├── .claude-plugin/          # Claude Code プラグイン
 ├── skills/
 │   └── meiseki/
 │       ├── SKILL.md         # LLM オーケストレーター本体
 │       └── references/
-│           └── patterns.md  # 高負荷構文カタログ A–F
-├── .textlintrc.json         # 読解負荷に効くルールだけに絞った textlint 設定
-├── package.json             # textlint と技術文書プリセットへの依存
+│           ├── patterns.md             # 高負荷構文カタログ A–F
+│           └── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
+├── package.json             # 開発用の npm run lint だけを提供
 └── README.md
 ```
 
+## 必要環境
+
+* Node.js がインストールされていること
+
 ## インストール
 
-```bash
-# 依存の取得（textlint を使うため必須）
-cd meiseki && npm install
+### Agent Skill として使う
 
-# 導通確認
-npx textlint --version
+Node.js がインストールされた環境で以下を実行。
+
+```
+npx skills add https://github.com/bamboo-nova/meiseki --skill meiseki
 ```
 
-### Claude Code へ読み込む
+### Claude Code プラグインとして使う（任意）
 
 `claude plugin install` は**マーケットプレイスに登録されたプラグイン名**を取る（パスは取らない）。
 そのため `claude plugin install ./meiseki` や `claude plugin install .` は失敗する。正しくは、
@@ -97,18 +99,6 @@ claude --plugin-dir ./meiseki
 
 > マニフェストの検証は `claude plugin validate ./meiseki` で行える。
 
-### サプライチェーン対策：7日間の cooldown
-
-`meiseki/.npmrc` に `min-release-age=7` を設定しているため、**公開から 7 日未満のバージョンはインストールされません**。
-侵害された npm パッケージは公開後まもなく発覚・unpublish されることが多く、「枯れた」バージョンだけを採用することで
-リスク窓を避けます（npm 11.5+ 標準の機能。内部的には `before = now − 7日` として解決されます）。
-
-- 期間を変えたい場合は `.npmrc` の数値を増減する。
-- 一時的に無効化して最新を入れたいときは `npm install --min-release-age=0`。
-- `npm config get min-release-age` は常に `null` を返すが、これは npm が内部で `before` に変換するための仕様で、cooldown 自体は有効。
-  動作確認するなら `npm install <pkg> --min-release-age=3000 --dry-run` で古いバージョンに解決されることを見るとよい。
-- 既存の `package-lock.json` に固定済みのバージョンは（`npm ci` では）そのまま使われる。cooldown は新規解決・更新時に効く。
-
 ## 使い方
 
 対象の日本語をスキルに渡すだけ。発動例：
@@ -120,7 +110,7 @@ claude --plugin-dir ./meiseki
 標準ではリライト後の**本文のみ**が返る。`「どこを直したか教えて」`と指定すると変更点も添える。
 `「スコアも出して」`と指定すると読解負荷スコア(before→after)を併記する。
 
-## `.textlintrc.json` のルール意図（差別化の肝）
+## `references/textlint.config.json` のルール意図（差別化の肝）
 
 フルプリセットは表記ゆれ・感嘆符・カタカナ長音など**読解負荷と無関係なルール**まで効いて「整えすぎ」になる。
 meiseki は**読解負荷に効くルールだけ**を残し、それ以外を `false` で外している。
@@ -140,10 +130,10 @@ meiseki は**読解負荷に効くルールだけ**を残し、それ以外を `
 無効化（false）：`arabic-kanji-numbers`, `no-mix-dearu-desumasu`, `ja-no-mixed-period`,
 `no-dropping-the-ra`, `no-exclamation-question-mark`, `no-nfd`。
 
-> **プリセット追従の注意**：`textlint-rule-preset-ja-technical-writing` のルールキーやデフォルト値は
-> バージョンで変わりうる。`npm install` 後にプリセットの README で現行のルール一覧を確認し、
-> 上記キーが存在するか・キー名が一致するかを点検すること。読解負荷と無関係な同梱ルールが増えていたら、
-> 同様に `false` で外す。
+> **プリセット追従の注意**：`textlint` パッケージや `textlint-rule-preset-ja-technical-writing` パッケージの固定バージョンを変えると、
+> `textlint-rule-preset-ja-technical-writing` のルールキーやデフォルト値も変わりうる。
+> 変更時はプリセットの README でルール一覧を確認し、上記キーが存在するか・キー名が一致するかを点検すること。
+> 読解負荷と無関係な同梱ルールが増えていたら、同様に `false` で外す。
 
 ## 読解負荷スコア（RLS）
 
@@ -178,11 +168,11 @@ RLS = Σ(カテゴリ件数 × 重み) ÷ 本文の文数 × 100   （低いほ�
 
 ## 免責事項
 
-- 本プラグインは「現状有姿（AS IS）」で提供され、出力結果の正確性・完全性・特定目的への適合性について**いかなる保証もしません**。
+- 本Agent Skillおよびプラグインは「現状有姿（AS IS）」で提供され、出力結果の正確性・完全性・特定目的への適合性について**いかなる保証もしません**。
 - meiseki は文章を**書き換える**ツールである以上、明晰化の過程で原文の意味・ニュアンス・事実関係が変化する可能性があります。**出力は必ず利用者自身が確認・検証したうえで使用してください。** 最終的な内容の責任は利用者にあります。
 - 法務・医療・契約・論文など、表現の厳密さが要求される文書は**対象外**です（「何を直すか」参照）。これらの用途で生じた結果について作者は責任を負いません。
-- 本プラグインの使用または使用不能から生じた直接・間接のいかなる損害についても、作者および権利者は責任を負いません（詳細は `LICENSE` を参照）。
-- 本プラグインは textlint 等の第三者 OSS に依存します。それら依存パッケージの動作・セキュリティについては各提供元の規約・ライセンスに従います。
+- 本Agent Skillおよびプラグインの使用または使用不能から生じた直接・間接のいかなる損害についても、作者および権利者は責任を負いません（詳細は `LICENSE` を参照）。
+- 本Agent Skillおよびプラグインは textlint 等の第三者 OSS に依存します。それら依存パッケージの動作・セキュリティについては各提供元の規約・ライセンスに従います。
 
 ## ライセンス
 

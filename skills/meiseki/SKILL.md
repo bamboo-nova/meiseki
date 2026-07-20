@@ -44,7 +44,7 @@ description: >
 
 ```bash
 # textlint を JSON フォーマットで実行（Skill 同梱の設定を使う）
-npx --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
+npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
 ```
 
 - `<SKILL_DIR>` はこの `SKILL.md` があるディレクトリの実パスに置き換える。

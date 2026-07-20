@@ -40,22 +40,16 @@ description: >
 特に否定・条件・係り受けの論理構造を頭の中で確定させる。
 
 ### Step 2. textlint を実行する（決定論層）
-原稿を一時ファイルに書き出し、Bash で textlint を実行して JSON を読む。
+原稿を任意の一時ファイル（拡張子は `.md`）に書き出し、Node.js 同梱の `npx` 経由で textlint を実行して JSON を読む。
 
 ```bash
-# 原稿を一時ファイルへ（拡張子は .md）
-TMP="$(mktemp -t meiseki).md"
-cat > "$TMP" <<'MEISEKI_EOF'
-<ここに原稿をそのまま>
-MEISEKI_EOF
-
-# textlint を JSON フォーマットで実行（プラグイン同梱の設定を使う）
-npx textlint -c "${CLAUDE_PLUGIN_ROOT}/.textlintrc.json" -f json "$TMP"
+# textlint を JSON フォーマットで実行（Skill 同梱の設定を使う）
+npx --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
 ```
 
-- `${CLAUDE_PLUGIN_ROOT}` はプラグインのルート（`.textlintrc.json` と `package.json` がある場所）に解決される。
-  解決されない環境では、プラグインを配置した実パスを直接指定するか、`cd <plugin> && npx textlint -c .textlintrc.json -f json "$TMP"` で代替する。
-- 依存が未インストールなら、プラグインのルートで一度だけ `npm install` を実行する。
+- `<SKILL_DIR>` はこの `SKILL.md` があるディレクトリの実パスに置き換える。
+- `<INPUT_MD>` は原稿を書き出した一時 Markdown ファイルの実パスに置き換える。
+- `textlint` は指摘があると終了コード 1 を返す。その場合も stdout の JSON を読み、処理は続ける。
 - 出力 JSON の各 `messages[]` から `ruleId`（例 `preset-ja-technical-writing/no-double-negative-ja`）と
   `line` / `column` を読み、高負荷箇所を特定する。
 

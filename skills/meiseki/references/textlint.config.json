@@ -26,6 +26,9 @@
       "no-invalid-control-character": false,
       "no-unmatched-pair": false,
       "no-zero-width-spaces": false
+    },
+    "prh": {
+      "rulePaths": ["./prh-llm-phrases.yml"]
     }
   }
 }

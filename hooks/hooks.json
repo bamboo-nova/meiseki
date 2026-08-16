@@ -1,0 +1,18 @@
+{
+  "description": "md書き込みをtextlintで検査し、読解負荷が高ければmeisekiスキルの適用をClaudeに要求する",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/meiseki-check.sh",
+            "timeout": 120,
+            "statusMessage": "meiseki: textlintで読解負荷を検査中..."
+          }
+        ]
+      }
+    ]
+  }
+}

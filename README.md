@@ -60,6 +60,11 @@
 ```
 meiseki/
 ├── .claude-plugin/          # Claude Code プラグイン
+├── hooks/
+│   └── hooks.json           # PostToolUse hook 定義（プラグイン利用時の自動適用）
+├── scripts/
+│   ├── meiseki-check.sh         # hook 本体：md 書き込みを textlint で検査
+│   └── test-meiseki-check.sh    # hook と prh 補完辞書の自動テスト（npm run test:hook）
 ├── skills/
 │   └── meiseki/
 │       ├── SKILL.md         # LLM オーケストレーター本体
@@ -118,6 +123,46 @@ claude --plugin-dir ./meiseki
 標準ではリライト後の**本文のみ**が返る。`「どこを直したか教えて」`と指定すると変更点も添える。
 `「スコアも出して」`と指定すると読解負荷スコア(before→after)を併記する。
 
+## 自動適用 hook（プラグイン利用時）
+
+プラグインとして有効化すると、**Claude が日本語 Markdown を Write / Edit するたびに自動で検査が走る**。
+hook 自体は LLM を呼ばない。textlint（決定論層）だけを実行し、読解負荷が高いときに
+Claude へ「meiseki スキルを適用してリライトせよ」とフィードバックする。
+Claude は同一セッション内で meiseki を適用し、ファイルを書き直す。
+
+```
+Claude が report.md を Write / Edit
+        │
+        ▼
+[PostToolUse hook] scripts/meiseki-check.sh
+  ├─ 対象外（.md 以外 / 除外パス / 日本語なし）→ 何もしない
+  ├─ textlint 実行 → 指摘なし・軽微 → 何もしない
+  └─ 二重否定あり or 指摘 3 件以上
+       → decision:"block" + 指摘要約を Claude にフィードバック
+       → Claude が meiseki を適用して再 Write（textlint 通過まで）
+```
+
+- **発動条件**：`no-double-negative-ja`（カテゴリ A）が 1 件以上、または textlint 指摘が計 3 件以上。
+  分離型・丁寧形の二重否定（prh 補完辞書で検出）は通常の prh 指摘として合計に数える。
+  なお本家 SKILL.md §7 の受け入れ基準は「after < before」の**相対比較**であり絶対閾値を持たないため、
+  この発動条件は hook 側の簡易基準である（`scripts/meiseki-check.sh` 冒頭を参照）。
+- **テスト**：`npm run test:hook`（= `scripts/test-meiseki-check.sh`）で、補完辞書の検出網羅と
+  hook の判定・除外・ループ防止を自動テストできる。
+- **除外**：`CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md`、`.claude/` `plans/` `memory/`
+  `node_modules/` `.git/` `scratchpad/` `/tmp` 配下、`examples/`・`references/` 配下、
+  日本語を含まないファイル。
+- **ループ防止**：同一セッション・同一ファイルへの block は最大 2 回。以降は警告のみ
+  （prh 指摘は「削除確定ではない」というガードレールと整合させるため）。
+- **フェイルオープン**：textlint が実行できない環境（オフライン等）では書き込みを妨げない。
+- **無効化**：環境変数 `MEISEKI_HOOK_DISABLE=1`、またはプラグイン自体の無効化。
+- **PDF について**：PDF は生成後の修正ができないため、生成元の Markdown 段階でこの hook が
+  明晰化を担保する（pandoc 等での PDF 化は明晰化済みの md から行われる）。
+
+> hook の追加・変更はセッション再起動（またはプラグインの再読み込み）後に反映される。
+> npx の初回実行はパッケージ取得で数十秒かかることがある（以後はキャッシュされる）。
+> Agent Skill としてのみ（`npx skills add`）導入した場合、hook は付かない。従来どおり
+> 依頼したときだけスキルが発動する。
+
 ## `references/textlint.config.json` のルール意図（差別化の肝）
 
 フルプリセットは表記ゆれ・感嘆符・カタカナ長音など**読解負荷と無関係なルール**まで効いて「整えすぎ」になる。
@@ -134,7 +179,7 @@ meiseki は**読解負荷に効くルールだけ**を残し、それ以外を `
 | `no-doubled-conjunction` | 接続詞の重複（D） |
 | `no-doubled-conjunctive-particle-ga` | 逆接「が」の連続＝詰め込みの合図（B） |
 | `ja-no-weak-phrase` | 弱い表現（D。※立場を強める方向には使わない） |
-| `prh`（同梱辞書 `prh-llm-phrases.yml`） | LLM 定型句（G）。**検出専用**。削るか残すかは LLM が文脈判断する |
+| `prh`（同梱辞書 `prh-llm-phrases.yml`） | LLM 定型句（G）。**検出専用**。削るか残すかは LLM が文脈判断する。加えて `no-double-negative-ja` が拾えない分離型・丁寧形の二重否定（「〜ないとは言えません」等）を A1 補完セクションで検出する |
 
 無効化（false）：`arabic-kanji-numbers`, `no-mix-dearu-desumasu`, `ja-no-mixed-period`,
 `no-dropping-the-ra`, `no-exclamation-question-mark`, `no-nfd`。

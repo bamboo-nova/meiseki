@@ -1,6 +1,6 @@
 {
   "name": "meiseki",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトする Agent Skill の決定論層。",
   "scripts": {

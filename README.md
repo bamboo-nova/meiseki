@@ -147,7 +147,9 @@ Claude が report.md を Write / Edit
         │
         ▼
 [PostToolUse hook] scripts/meiseki-check.sh
-  ├─ 対象外（.md 以外 / 除外パス / 日本語なし）→ 何もしない
+  ├─ 対象外（.md 以外 / 除外パス / 日本語なし / opt-out）→ 何もしない
+  ├─ 再実行ガード（内容ハッシュ）→ 判定済み・上限到達 → lint せず終了
+  ├─ 対象外領域をマスク（コード・数式・引用・参考文献・図表キャプション）
   ├─ textlint 実行 → 指摘なし・軽微 → 何もしない
   └─ 二重否定あり or 指摘 3 件以上
        → decision:"block" + 指摘要約を Claude にフィードバック
@@ -158,15 +160,27 @@ Claude が report.md を Write / Edit
   分離型・丁寧形の二重否定（prh 補完辞書で検出）は通常の prh 指摘として合計に数える。
   なお本家 SKILL.md §7 の受け入れ基準は「after < before」の**相対比較**であり、絶対閾値を持たない。
   そのためこの発動条件は hook 側の簡易基準である（`scripts/meiseki-check.sh` 冒頭を参照）。
+- **対象外領域のマスキング**：SKILL.md §3 の対象外宣言をフック側でも実装している。
+  コードフェンス（mermaid 含む）・数式（`$...$` / `$$...$$` / `\begin{...}`）・引用ブロック・
+  図表キャプション行（`図1:` / `Table 1.` 等）・参考文献セクション（`## 参考文献` / `## References` 等の
+  見出しから次の見出しまで。**セクション丸ごとマスクするため Nature / ASA / APA / IEEE / 和文と
+  いったエントリのフォーマットに依存しない**）・本文中の IEEE 形式 `[1] ...` 行・脚注定義 `[^1]:` は、
+  lint 前に空行へ置換され判定に影響しない。学術系文書の参考文献・数式・キャプションが
+  誤検知される問題への対策。
 - **テスト**：`npm run test:hook`（= `scripts/test-meiseki-check.sh`）を用意した。
-  補完辞書の検出網羅と、hook の判定・除外・ループ防止を自動テストできる。
+  補完辞書の検出網羅と、hook の判定・除外・マスキング・opt-out・ループ防止を自動テストできる。
 - **除外**：`CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md`、`.claude/` `plans/` `memory/`
   `node_modules/` `.git/` `scratchpad/` `/tmp` 配下、`examples/`・`references/` 配下、
   日本語を含まないファイル。
 - **ループ防止**：同一セッション・同一ファイルへの block は最大 2 回。以降は警告のみ
   （prh 指摘は「削除確定ではない」というガードレールと整合させるため）。
+  判定は内容ハッシュ入りのステート（`$TMPDIR/meiseki-hook-state.tsv`）に記録され、
+  同一内容の再書き込みは textlint を実行せず前回判定をリプレイする。
+  別セッション（再起動後など）でも block 済みの同一内容には警告のみで再 block しない。
 - **フェイルオープン**：textlint が実行できない環境（オフライン等）では書き込みを妨げない。
 - **無効化**：環境変数 `MEISEKI_HOOK_DISABLE=1`、またはプラグイン自体の無効化。
+  ファイル単位では frontmatter に `meiseki: skip`、または本文のどこかに
+  `<!-- meiseki-disable -->` と書くとそのファイルだけ検査対象から外れる。
 - **PDF について**：PDF は生成後の修正ができない。そのため生成元の Markdown 段階で
   この hook が明晰化を担保する（pandoc 等での PDF 化は明晰化済みの md から行われる）。
 

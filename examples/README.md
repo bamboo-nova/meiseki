@@ -1,26 +1,27 @@
 # meiseki 適用例（Before / After）
 
 `meiseki` を実際の日本語にかけた例を集めた。各例は `NN-name.before.md`（原文）と `NN-name.after.md`（明晰化後）の対で置いてある。
-読解負荷スコア（RLS。低いほど読みやすい）は同梱の `skills/meiseki/references/textlint.config.json` で textlint を実行して測った実測値。
+読解負荷スコア（RLS。低いほど読みやすい）は同梱の `.agents/skills/meiseki/references/textlint.config.json` で textlint を実行して測った実測値。
 
 | # | 例 | 主に効いたカテゴリ | RLS (before → after) |
 |---|---|---|---|
-| 01 | リトライ機構の説明 | A 二重否定 / B 長文・連体修飾 / C の連鎖 / D 冗長・一般論 | **133.3 → 0.0** |
+| 01 | リトライ機構の説明 | A 二重否定 / B 長文・連体修飾 / C の連鎖 / D 冗長・一般論 | **166.7 → 0.0** |
 | 02 | 埋もれた列挙 | F 列挙の箇条書き化 / B 読点過多 | **200.0 → 0.0** |
 | 03 | 名詞化・「の」連鎖 | C（textlint では測れない＝LLM 判断） | 0.0 → 0.0 ※ |
-| 04 | 飾りの箇条書き | E 体裁（textlint では測れない＝LLM 判断） | 0.0 → 0.0 ※ |
+| 04 | 飾りの箇条書き | E 体裁（`no-ai-list-formatting` で機械検出） | **75.0 → 0.0** |
 | 05 | 元から平易な文 | （なし＝あえて触らない） | 0.0 → 0.0 |
-| 06 | LLM 定型句 | G 定型句（prh 辞書で機械検出） | **150.0 → 0.0** |
+| 06 | LLM 定型句 | G 定型句（prh 辞書で機械検出）/ D 曖昧表現（`ai-tech-writing-guideline`） | **175.0 → 0.0** |
 | 07 | 段落レベルの反復 | H 段落冗長（textlint では測れない＝LLM 判断） | 0.0 → 0.0 ※ |
 | 08 | 分離型・丁寧形の二重否定 | A 二重否定（`no-double-negative-ja` 未対応形を prh 補完辞書で機械検出） | **150.0 → 0.0** |
 | 09 | 学術文書（混在文書） | A / G を本文だけ直し、参考文献・数式・キャプション・引用は原文のまま | **71.4 → 0.0** ※本文のみ |
 
-※ 03・04・07 は RLS が動かないが、これは**欠陥ではなく設計どおり**。「の」連鎖・一般の名詞化（C の一部）、体裁（E）、段落レベルの反復（H）は textlint では検出できず LLM が担う領域で、RLS はあくまで textlint が見える範囲の指標だからだ。改善自体は本文を見れば分かる。詳しくは各例の注を参照。
+※ 03・07 は RLS が動かないが、これは**欠陥ではなく設計どおり**。「の」連鎖・一般の名詞化（C の一部）、段落レベルの反復（H）は textlint では検出できず LLM が担う領域で、RLS はあくまで textlint が見える範囲の指標だからだ。改善自体は本文を見れば分かる。詳しくは各例の注を参照。
+なお 04（体裁）は v0.5.0 で `textlint-rule-preset-ai-writing` を導入したことで決定論検出に変わり、RLS が動くようになった。
 
 > 再現方法：プラグインルートで次のように実行するとスコアの素データ（指摘の JSON）が得られる。
 >
 > ```bash
-> npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-prh@6.1.0 textlint -c skills/meiseki/references/textlint.config.json -f json examples/01-retry.before.md
+> npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c .agents/skills/meiseki/references/textlint.config.json -f json examples/01-retry.before.md
 > ```
 
 ---
@@ -106,7 +107,8 @@
 
 - **E1 飾りの箇条書き**：これは同格の列挙ではなく「短縮した → だから体験が向上 → 結果まとめ」という**因果の流れ**を無理に箇条書きに割ったもの。流れのある説明なので散文に戻す。
 - **02 との対比**：02（埋もれた列挙）は箇条書きに**開き**、04（飾りの箇条書き）は散文に**畳む**。一見逆だが、統一原理は同じ「構造を内容の論理形状に合わせる」。
-- これも E は textlint では測れないため RLS は 0.0 → 0.0。
+- **機械検出**：v0.5.0 から「太字＋コロン」のリスト定型は `ai-writing/no-ai-list-formatting` が検出する
+  （before は E 3 件 ÷ 4 文 × 100 = RLS **75.0**）。散文に戻すかどうかの判断は従来どおり LLM が担う。
 
 ---
 
@@ -142,7 +144,7 @@
 - **G1 予告と総括**：「重要なのは〜です」の予告の枠を外し、主張を直接書く。「〜に他なりません」の空虚な強調文は、直前の主張の繰り返しでもある（H1 と同根）ため削る。
 - **G2 空虚な形容**：「極めて重要」「不可欠な要素」を、根拠を足さずに「必要です」へ落とす。主張の向きは変えない。
 - **G3 空虚な動詞**：「多角的に掘り下げていきます」→「説明します」。本文に実際の観点が書かれていないので具体化はしない。
-- **機械検出**：before では同梱の prh 辞書（`prh-llm-phrases.yml`）が 6 件（重要なのは／極めて／不可欠／多角的／掘り下げ／に他なりません）を検出し、RLS は **150.0**。after で 0 件になる。**G は決定論層で検出でき、LLM 層が「削るか残すか」を文脈判断する**という分担の例。
+- **機械検出**：before では同梱の prh 辞書（`prh-llm-phrases.yml`）が 6 件（重要なのは／極めて／不可欠／多角的／掘り下げ／に他なりません）、v0.5.0 で導入した `ai-writing/ai-tech-writing-guideline` が曖昧表現（D）を 1 件検出し、計 7 件で RLS は **175.0**（guideline の総括行は数えない）。after で 0 件になる。**G は決定論層で検出でき、LLM 層が「削るか残すか」を文脈判断する**という分担の例。
 
 ---
 

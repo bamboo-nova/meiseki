@@ -20,6 +20,8 @@
 - 太字＋コロンの箇条書き乱用などの過剰な体裁
 - 一文に埋もれた 3 項目以上の同格列挙（箇条書きに開く）
 - LLM 定型句（`「重要なのは〜」` `「掘り下げる」` `「多角的」` `「〜に他ならない」` など。同梱の prh 辞書で機械検出）
+- AI 臭の強い体裁と誇張語（絵文字箇条書き・太字＋コロンのリスト定型・`「革命的」` `「ゲームチェンジャー」` など。
+  `textlint-rule-preset-ai-writing` で機械検出）
 - 段落レベルの冗長（同じ主張の言い換え反復・描写直後の再要約・並列事実の分散）
 
 **対象**：技術記事・README・設計書・社内ドキュメント・ブログの説明文。
@@ -35,7 +37,8 @@
         │
         ├──▶ textlint（npx 実行・決定論層）
         │       二重否定・一文長・読点過多・連続漢字・冗長、
-        │       LLM 定型句（prh 同梱辞書）などを
+        │       LLM 定型句（prh 同梱辞書）、AI 臭の体裁・誇張語
+        │       （preset-ai-writing）などを
         │       行/列つきの機械可読(JSON)で検出 → 読解負荷スコア(before)
         │
         └──▶ パターンカタログ A–H（LLM 判断層）
@@ -59,20 +62,24 @@
 
 ```
 meiseki/
-├── .claude-plugin/          # Claude Code プラグイン
+├── .claude-plugin/          # Claude Code プラグイン manifest
+├── .codex-plugin/           # Codex CLI プラグイン manifest
 ├── hooks/
-│   └── hooks.json           # PostToolUse hook 定義（プラグイン利用時の自動適用）
+│   ├── hooks.json           # Claude Code 用 PostToolUse hook 定義
+│   └── codex-hooks.json     # Codex CLI 用 PostToolUse hook 定義
 ├── scripts/
-│   ├── meiseki-check.sh         # hook 本体：md 書き込みを textlint で検査
+│   ├── meiseki-lint-core.sh     # 決定論層コア：マスキング + textlint + 閾値判定（ホスト非依存）
+│   ├── meiseki-check.sh         # Claude Code アダプタ：JSON 入出力と再実行ガード
+│   ├── codex-hook.sh            # Codex アダプタ：apply_patch エンベロープからパスを抽出して橋渡し
 │   └── test-meiseki-check.sh    # hook と prh 補完辞書の自動テスト（npm run test:hook）
-├── skills/
+├── .agents/skills/          # Agent Skills 標準の配置（Claude Code と Codex が共用）
 │   └── meiseki/
 │       ├── SKILL.md         # LLM オーケストレーター本体
 │       └── references/
 │           ├── patterns.md             # 高負荷構文カタログ A–H
 │           ├── prh-llm-phrases.yml     # LLM 定型句の検出辞書（カテゴリ G・検出専用）
 │           └── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
-├── package.json             # 開発用の npm run lint だけを提供
+├── package.json             # 開発用の npm run lint / test:hook を提供
 └── README.md
 ```
 
@@ -112,6 +119,30 @@ claude --plugin-dir ./meiseki
 
 > マニフェストの検証は `claude plugin validate ./meiseki` で行える。
 
+### Codex CLI プラグインとして使う（v0.5.0 から）
+
+Codex CLI（0.149 系で動作確認）は Agent Skills 標準とプラグイン機構を持ち、meiseki をそのまま読み込める。
+
+```bash
+# 1. このリポジトリをマーケットプレイスとして登録（Claude 用 marketplace.json を Codex も読める）
+codex plugin marketplace add ./meiseki
+
+# 2. install（バージョンは .codex-plugin/plugin.json から解決される）
+codex plugin add meiseki@bamboo-nova-ja-tools
+```
+
+これで meiseki スキル（`meiseki:meiseki`）が Codex から使える。
+自動適用フック（`hooks/codex-hooks.json`）も同梱されるが、Codex のフックは
+**セキュリティ上、初回に明示的な信頼付与が必要**になっている。Codex の対話セッションで
+`/hooks` を実行し、meiseki のフックを trust すると有効になる。
+
+- プラグインを使わない場合の代替: スキルは `.agents/skills/meiseki/` を
+  `~/.agents/skills/` にコピーすれば全プロジェクトで使える。フックはプロジェクトの
+  `.codex/hooks.json` に `scripts/codex-hook.sh` への絶対パスを書けば同じ検査が走る。
+- Codex のサンドボックスがネットワークを遮断していると、フック内の `npx` が
+  パッケージを取得できず検査は素通しになる（フェイルオープン）。事前に一度
+  `npm run lint -- <適当な md>` を実行してキャッシュを温めておくと確実に動く。
+
 ### 既存環境の更新（旧バージョンからの入れ替え）
 
 hook 付きの v0.3.0 以降へ更新するときは、いったんアンインストールしてから入れ直す。
@@ -146,7 +177,7 @@ Claude は同一セッション内で meiseki を適用し、ファイルを書�
 Claude が report.md を Write / Edit
         │
         ▼
-[PostToolUse hook] scripts/meiseki-check.sh
+[PostToolUse hook] scripts/meiseki-check.sh（検査本体は scripts/meiseki-lint-core.sh）
   ├─ 対象外（.md 以外 / 除外パス / 日本語なし / opt-out）→ 何もしない
   ├─ 再実行ガード（内容ハッシュ）→ 判定済み・上限到達 → lint せず終了
   ├─ 対象外領域をマスク（コード・数式・引用・参考文献・図表キャプション）
@@ -206,6 +237,10 @@ meiseki は**読解負荷に効くルールだけ**を残し、それ以外を `
 | `no-doubled-conjunctive-particle-ga` | 逆接「が」の連続＝詰め込みの合図（B） |
 | `ja-no-weak-phrase` | 弱い表現（D。※立場を強める方向には使わない） |
 | `prh`（同梱辞書 `prh-llm-phrases.yml`） | LLM 定型句（G）。**検出専用**。削るか残すかは LLM が文脈判断する。加えて `no-double-negative-ja` が拾えない分離型・丁寧形の二重否定（`「〜ないとは言えません」` 等）を A1 補完セクションで検出する |
+| `preset-ai-writing/no-ai-list-formatting` | 絵文字箇条書き・太字＋コロンのリスト定型（E） |
+| `preset-ai-writing/no-ai-emphasis-patterns` | リスト内の過剰太字（E） |
+| `preset-ai-writing/no-ai-hype-expressions` | 誇張語 `「革命的」` 等（G）。prh と同じく検出専用で、文脈判断は LLM が担う |
+| `preset-ai-writing/ai-tech-writing-guideline` | 冗長助動詞・曖昧表現などの簡潔性指摘（D）。既定の severity が info のため明示的に有効化している |
 
 無効化（false）にしたルール:
 
@@ -228,10 +263,10 @@ RLS = Σ(カテゴリ件数 × 重み) ÷ 本文の文数 × 100   （低いほ�
 | A 否定の入れ子（最優先） | `no-double-negative-ja` | 3 |
 | B 距離・長さ | `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga` | 2 |
 | C 漢語・名詞化 | `max-kanji-continuous-len`, `ja-no-redundant-expression` | 2 |
-| D 冗長・空虚 | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase` | 1 |
-| E 体裁 | （LLM 判断） | 1 |
+| D 冗長・空虚 | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`, `ai-tech-writing-guideline` | 1 |
+| E 体裁 | `no-ai-list-formatting`, `no-ai-emphasis-patterns`（＋LLM 判断） | 1 |
 | F 構造化（列挙） | （LLM 判断） | 1 |
-| G 定型句 | `prh`（同梱辞書） | 1 |
+| G 定型句 | `prh`（同梱辞書）, `no-ai-hype-expressions` | 1 |
 | H 段落冗長 | （LLM 判断） | 1 |
 
 **受け入れ基準：after < before を必須、A（二重否定）は原則 0 件。** 意図的な litotes だけ例外。
@@ -266,6 +301,11 @@ k16shikano 氏の [日本語技術文書の文章規範](https://gist.github.com
 - 法務・医療・契約・論文など、表現の厳密さが要求される文書は**対象外**です（「何を直すか」参照）。これらの用途で生じた結果について作者は責任を負いません。
 - 本Agent Skillおよびプラグインの使用または使用不能から生じた直接・間接のいかなる損害についても、作者および権利者は責任を負いません（詳細は `LICENSE` を参照）。
 - 本Agent Skillおよびプラグインは textlint 等の第三者 OSS に依存します。それら依存パッケージの動作・セキュリティについては各提供元の規約・ライセンスに従います。
+
+## 謝辞
+
+- E（体裁）・G（誇張語）・D（簡潔性）の機械検出には [textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)（textlint-ja、MIT License）を利用しています。
+- そのほか [textlint](https://github.com/textlint/textlint) 本体・[textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)・[textlint-rule-prh](https://github.com/textlint-rule/textlint-rule-prh) など、依存する各 OSS の作者・コミュニティに感謝します。各パッケージはそれぞれのライセンスに従います。
 
 ## ライセンス
 

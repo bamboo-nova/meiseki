@@ -26,8 +26,9 @@ lint() {
   npx --min-release-age=7 --yes \
     --package textlint@14.8.4 \
     --package textlint-rule-preset-ja-technical-writing@10.0.2 \
+    --package textlint-rule-preset-ai-writing@1.1.0 \
     --package textlint-rule-prh@6.1.0 \
-    textlint -c skills/meiseki/references/textlint.config.json -f json "$1" 2>/dev/null
+    textlint -c .agents/skills/meiseki/references/textlint.config.json -f json "$1" 2>/dev/null
 }
 
 hook() { # file [session]

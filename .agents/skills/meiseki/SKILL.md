@@ -45,7 +45,7 @@ description: >
 
 ```bash
 # textlint を JSON フォーマットで実行（Skill 同梱の設定を使う）
-npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-prh@6.1.0 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
+npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
 ```
 
 - `<SKILL_DIR>` はこの `SKILL.md` があるディレクトリの実パスに置き換える。
@@ -61,12 +61,14 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
 `references/patterns.md` を参照し、**優先度 A→H の順**で直す。
 
 - **A（否定・条件の入れ子）が最優先。** 二重否定は最初に畳む。
-- textlint が拾った箇所（A 二重否定 / B 一文長・読点 / C 連続漢字・冗長 / D 接続詞重複・弱い表現 /
-  G 定型句（`prh`））はその指摘を起点に直す。
+- textlint が拾った箇所（A 二重否定 / B 一文長・読点 / C 連続漢字・冗長 / D 接続詞重複・弱い表現・冗長助動詞
+  （`ai-tech-writing-guideline`） / E 絵文字箇条書き・過剰太字（`ai-writing/*`） / G 定型句（`prh`）・誇張語
+  （`no-ai-hype-expressions`））はその指摘を起点に直す。
 - **G の prh 指摘は削除確定ではない。** 語が文脈で実質を持つ場合（本当に多角的な比較をした直後の
   「多角的」など）は残す。文脈判断は LLM が担う。
 - **textlint が拾えない構文は LLM 側で判断する**：B 長い連体修飾、C「の」連鎖の深さ・一般の名詞化、
-  E 体裁、F 埋もれた列挙の箇条書き化、G 辞書外の定型句、H 段落レベルの言い換え反復・再要約。
+  E 散文に戻すかの判断・見出しの過剰構造化・コロン接続、F 埋もれた列挙の箇条書き化、G 辞書外の定型句、
+  H 段落レベルの言い換え反復・再要約。
   ここが meiseki の独自価値であり、textlint 設定だけでは到達できない。
 
 ### Step 5. 意味の検算（最重要のガード）
@@ -108,6 +110,8 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
   リズムを作る接続表現（「しかし一方で」など）は冗長と見なさない。
 - **定型句（G）は「空虚なもの」だけ削る。** 文脈で実質を持つ語（実際に複数の観点を挙げた直後の
   「多角的」、実質のある要約を導く「要するに」など）は残す。prh の指摘は起点であって命令ではない。
+  `no-ai-hype-expressions`（誇張語）の指摘も同じ扱いとする。実測や比較が本文にあり語が実質を
+  持つ場合（実測値を伴う「大幅に」など）は残す。
 - **段落の反復（H）は「情報量が増えない繰り返し」だけ削る。** 主張・例・根拠・例外は
   ひとつも消さない。段落分割で文の順序・論理の流れは変えない。
 
@@ -131,28 +135,37 @@ RLS = Σ(カテゴリ件数 × 重み) ÷ 本文の文数 × 100
 | A 否定の入れ子（最優先） | `no-double-negative-ja` | 3 |
 | B 距離・長さ | `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga` | 2 |
 | C 漢語・名詞化 | `max-kanji-continuous-len`, `ja-no-redundant-expression` | 2 |
-| D 冗長・空虚 | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase` | 1 |
-| E 体裁 | （LLM 判断・簡易検出） | 1 |
+| D 冗長・空虚 | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`, `ai-writing/ai-tech-writing-guideline` | 1 |
+| E 体裁 | `ai-writing/no-ai-list-formatting`, `ai-writing/no-ai-emphasis-patterns`（＋LLM 判断） | 1 |
 | F 構造化（列挙） | （LLM 判断） | 1 |
-| G 定型句 | `prh`（同梱辞書 `prh-llm-phrases.yml`） | 1 |
+| G 定型句 | `prh`（同梱辞書 `prh-llm-phrases.yml`）, `ai-writing/no-ai-hype-expressions` | 1 |
 | H 段落冗長 | （LLM 判断） | 1 |
 
 - C と D は `ja-no-redundant-expression` を共有する。二重計上を避けるため、当該指摘は **D に寄せて 1 回だけ**数える
   （`max-kanji-continuous-len` は C 固有として数える）。
 - G は `ruleId` が `prh` の指摘を数える。「〜の観点から」系（D2 と同根）と接続詞連打
   （`no-doubled-conjunction`）は D に寄せ、G と二重計上しない。
+- `ai-writing/*` の指摘は次のとおり数える（二重計上の防止）:
+  - 同一箇所（行と列が一致）を `prh` と `no-ai-hype-expressions` が両方拾ったら **G に 1 回だけ**。
+  - 同一箇所を `ja-no-redundant-expression` と `ai-tech-writing-guideline` が両方拾ったら **D に 1 回だけ**。
+  - `ai-tech-writing-guideline` の総括行（「【テクニカルライティング品質分析】…」で始まるメッセージ）は
+    個別指摘の集計であり、**件数に数えない**。
 - **受け入れ基準：after < before を必須**、かつ **A（二重否定）は原則 0 件**。
 - 重み（特に A=3 の比率）・一文長(90字)・F の扱いは、実ドキュメントで較正して調整してよい。
 
 ## 8. textlint が拾える / 拾えないもの
 
 - **textlint で決定論的に取れる**：A 二重否定、B 一文長・読点・逆接「が」連続、C 連続漢字・「することができる」、
-  D 冗長・接続詞重複・弱い表現、G 辞書収録の定型句（`prh`。「〜に他ならない」「重要なのは」「掘り下げる」等）。
+  D 冗長・接続詞重複・弱い表現、E 絵文字箇条書き・リスト内の過剰太字（`ai-writing/no-ai-list-formatting`,
+  `ai-writing/no-ai-emphasis-patterns`）、G 辞書収録の定型句（`prh`。「〜に他ならない」「重要なのは」
+  「掘り下げる」等）と誇張語（`ai-writing/no-ai-hype-expressions`。「革命的」「ゲームチェンジャー」等）。
   - A の注意：`no-double-negative-ja` は分離型（「〜ないとは言えない」「〜は否定できない」「〜なくはない」
     「〜ないわけがない」）と丁寧形（「〜ないわけではありません」等）を拾わない。これらは同梱 prh 辞書の
     「A1 補完」セクションが検出する（`ruleId` は `prh` になるが、リライトは A の基準＝真偽を反転させずに
     肯定へ畳む＝で行う）。
-- **textlint では取れない（LLM が担う）**：B 長い連体修飾、C「の」連鎖の深さ・一般の名詞化、E 体裁、
-  F 列挙の箇条書き化、G 辞書外の定型句と「削るか残すか」の文脈判断、H 段落レベルの言い換え反復・再要約。
+- **textlint では取れない（LLM が担う）**：B 長い連体修飾、C「の」連鎖の深さ・一般の名詞化、
+  E 散文に戻すかの判断・見出しの過剰構造化・英語的コロン接続（`no-ai-colon-continuation` は
+  preset-ai-writing@1.1.0 に未収録）、F 列挙の箇条書き化、G 辞書外の定型句と「削るか残すか」の文脈判断、
+  H 段落レベルの言い換え反復・再要約。
 
 この「取れない部分」が meiseki の独自価値。textlint 設定だけで終わらせない。

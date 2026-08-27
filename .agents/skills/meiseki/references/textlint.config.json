@@ -27,6 +27,12 @@
       "no-unmatched-pair": false,
       "no-zero-width-spaces": false
     },
+    "preset-ai-writing": {
+      "no-ai-list-formatting": true,
+      "no-ai-hype-expressions": true,
+      "no-ai-emphasis-patterns": true,
+      "ai-tech-writing-guideline": true
+    },
     "prh": {
       "rulePaths": ["./prh-llm-phrases.yml"]
     }

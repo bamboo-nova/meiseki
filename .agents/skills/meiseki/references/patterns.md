@@ -8,10 +8,10 @@
 - [A. 否定・条件の入れ子（最優先）](#a-否定条件の入れ子最優先) ｜ textlint: `no-double-negative-ja`
 - [B. 係り受け・修飾の距離](#b-係り受け修飾の距離) ｜ textlint: `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga`（+ LLM）
 - [C. 名詞化・漢語の重さ](#c-名詞化漢語の重さ) ｜ textlint: `ja-no-redundant-expression`, `max-kanji-continuous-len`（+ LLM）
-- [D. 冗長・空虚な表現](#d-冗長空虚な表現) ｜ textlint: `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`
-- [E. 構造・体裁](#e-構造体裁) ｜ textlint: なし（LLM 判断）
+- [D. 冗長・空虚な表現](#d-冗長空虚な表現) ｜ textlint: `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`, `ai-tech-writing-guideline`
+- [E. 構造・体裁](#e-構造体裁) ｜ textlint: `no-ai-list-formatting`, `no-ai-emphasis-patterns`（+ LLM）
 - [F. 情報の構造化（列挙の箇条書き化）](#f-情報の構造化列挙の箇条書き化) ｜ textlint: なし（LLM 判断）
-- [G. LLM 定型句・空虚な言い回し](#g-llm-定型句空虚な言い回し) ｜ textlint: `prh`（同梱辞書 + LLM 判断）
+- [G. LLM 定型句・空虚な言い回し](#g-llm-定型句空虚な言い回し) ｜ textlint: `prh` + `no-ai-hype-expressions`（同梱辞書 + LLM 判断）
 - [H. 段落レベルの冗長](#h-段落レベルの冗長) ｜ textlint: なし（LLM 判断）
 - [全体の検算](#全体の検算)
 
@@ -98,7 +98,9 @@ textlint: `ja-no-redundant-expression`（することができる 等）, `max-k
 ---
 
 ## D. 冗長・空虚な表現
-textlint: `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`
+textlint: `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`,
+`ai-tech-writing-guideline`（冗長助動詞・「まず最初に」等の簡潔性指摘。
+`ja-no-redundant-expression` と同一箇所（行・列一致）で重なったら D に 1 回だけ数える）
 
 情報量を増やさずに字数だけ増やす表現を削る。**削るのであって、足さない。**
 
@@ -133,7 +135,8 @@ textlint: `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-ph
 ---
 
 ## E. 構造・体裁
-textlint: なし（LLM 判断 or 簡易検出）
+textlint: `no-ai-list-formatting`（絵文字箇条書き）, `no-ai-emphasis-patterns`（リスト内の過剰太字）。
+散文に戻すかの判断・見出しの過剰構造化・記号乱用は LLM 判断。
 
 体裁の過剰さ自体が読解の妨げになり、AI っぽい指紋にもなる。
 
@@ -176,7 +179,9 @@ textlint: なし（LLM 判断）※新カテゴリ
 ---
 
 ## G. LLM 定型句・空虚な言い回し
-textlint: `prh`（同梱の `prh-llm-phrases.yml` で機械検出）＋ LLM 判断
+textlint: `prh`（同梱の `prh-llm-phrases.yml` で機械検出）, `no-ai-hype-expressions`
+（「革命的」「ゲームチェンジャー」等の誇張語）＋ LLM 判断。
+同一箇所（行・列一致）で prh と `no-ai-hype-expressions` が重なったら G に 1 回だけ数える。
 
 LLM が大量生成する、論点を増やさず「ちゃんと書いている感」だけを付ける定型句を削る。
 **削るのであって、足さない。** prh の指摘は削除確定ではなく起点であり、

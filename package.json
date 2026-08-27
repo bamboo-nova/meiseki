@@ -1,10 +1,10 @@
 {
   "name": "meiseki",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトする Agent Skill の決定論層。",
   "scripts": {
-    "lint": "npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-prh@6.1.0 textlint -c skills/meiseki/references/textlint.config.json -f json",
+    "lint": "npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c .agents/skills/meiseki/references/textlint.config.json -f json",
     "test:hook": "bash scripts/test-meiseki-check.sh"
   }
 }

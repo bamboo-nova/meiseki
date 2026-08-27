@@ -1,0 +1,17 @@
+{
+  "description": "Codex用: md編集をtextlintで検査し、読解負荷が高ければmeisekiスキルの適用を要求する",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}\"/scripts/codex-hook.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

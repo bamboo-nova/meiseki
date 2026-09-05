@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 .vite/
 
 .claude
+
+# JEV(日本語教育語彙表)はユーザー任意入手・二次配布禁止のためコミットしない
+.agents/skills/yorisoi/references/vocab/jev.csv

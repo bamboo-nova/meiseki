@@ -71,18 +71,31 @@ meiseki/
 │   ├── hooks.json           # PostToolUse hook definition for Claude Code
 │   └── codex-hooks.json     # PostToolUse hook definition for Codex CLI
 ├── scripts/
-│   ├── meiseki-lint-core.sh     # Deterministic-layer core: masking + textlint + threshold check (host-agnostic)
+│   ├── meiseki-lint-core.sh     # Deterministic-layer core: masking + textlint + threshold check (rule set swappable via env vars)
 │   ├── meiseki-check.sh         # Claude Code adapter: JSON I/O and re-run guard
 │   ├── codex-hook.sh            # Codex adapter: extracts paths from the apply_patch envelope and bridges
-│   └── test-meiseki-check.sh    # Automated tests for the hook and the prh supplement dictionary (npm run test:hook)
+│   ├── yorisoi-vocab-check.js  # Wrapper for the vocabulary-level checker (core ships inside the skill)
+│   ├── test-meiseki-check.sh    # Automated tests for the hook and the prh supplement dictionary (npm run test:hook)
+│   └── test-yorisoi.sh         # Automated tests for yorisoi detection and vocabulary checks (npm run test:yorisoi)
 ├── .agents/skills/          # Standard Agent Skills location (shared by Claude Code and Codex)
-│   └── meiseki/
-│       ├── SKILL.md         # The LLM orchestrator itself
+│   ├── meiseki/
+│   │   ├── SKILL.md         # LLM orchestrator for the clarity skill
+│   │   └── references/
+│   │       ├── patterns.md             # High-load syntax catalog A–H
+│   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
+│   │       └── textlint.config.json    # textlint config narrowed to rules that affect reading load
+│   └── yorisoi/
+│       ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
+│       ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
 │       └── references/
-│           ├── patterns.md             # High-load syntax catalog A–H
-│           ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
-│           └── textlint.config.json    # textlint config narrowed to rules that affect reading load
-├── package.json             # Provides npm run lint / test:hook for development
+│           ├── patterns-yorisoi.md    # Guideline-derived rewrite catalog YA–YH
+│           ├── prh-yorisoi.yml        # Detection dictionary: passive, speculation, honorifics, notation
+│           ├── textlint-yorisoi.config.json
+│           └── vocab/                  # Vocabulary lists (sources and licenses in its README)
+├── examples/
+│   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
+│   └── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
+├── package.json             # Provides npm run lint / lint:yorisoi / vocab:yorisoi / test:* for development
 └── README.md
 ```
 
@@ -169,6 +182,40 @@ Just hand the target Japanese text to the skill. Example triggers (in Japanese):
 
 By default only the **rewritten body text** is returned. Say「どこを直したか教えて」("tell me what you changed") to get the list of changes as well.
 Say「スコアも出して」("show the score too") to include the reading-load score (before→after).
+
+## Plain Japanese skill `meiseki:yorisoi` (since v0.6.0)
+
+A second skill that rewrites documents into "yorisoi nihongo" (plain Japanese) for foreign
+residents and Japanese learners. It differs from meiseki in **target reader**: use meiseki to
+polish prose for native readers, and yorisoi for readers still learning Japanese. Example triggers:
+
+- 「このお知らせをやさしい日本語にして」("Rewrite this notice in plain Japanese")
+- 「外国人にもわかるように書き直して」("Rewrite it so non-native readers understand")
+- 「やさしい日本語かチェックして」("Just check it" — report-only mode, no rewriting)
+
+It keeps the same two-layer architecture and adds an **official external norm** as its basis.
+
+- Normative basis: the [Guidelines for Plain Japanese for Residency Support](https://www.moj.go.jp/isa/support/portal/plainjapanese_guideline.html)
+  (Immigration Services Agency & Agency for Cultural Affairs, August 2020). Bans on double
+  negatives, avoidance of passive and speculative phrasing, simplified honorifics, and notation
+  rules (Western calendar years, AM/PM times, no "〜" ranges) are machine-detected by textlint
+  plus a bundled prh dictionary (`prh-yorisoi.yml`)
+- Vocabulary-level checking: a bundled script (`scripts/yorisoi-vocab-check.js`) tokenizes the
+  text with kuromoji.js (auto-fetched on first run) and reports words above the target level with
+  line positions. The default target is **roughly N4** (changeable, e.g. 「N3 で」)
+- **Every "N-level" label is an estimate.** The official JLPT vocabulary lists have been
+  unpublished since 2010, so the bundled lists (tanos.co.uk-derived, CC BY) and NINJAL's basic
+  vocabulary survey data (CC BY 4.0) approximate them. If you obtain the JEV vocabulary list
+  yourself and drop it in, it takes precedence (see `references/vocab/README.md`)
+- Scoring: a "yasashisa load score" (YLS, same form as RLS) verifies before→after
+- Important words that cannot be simplified are kept with an inline gloss in the guideline's
+  format:「余震＜＝後から来る地震＞」("aftershock <= an earthquake that comes later>")
+- **Not** wired into the auto-apply hook (on-demand only). Furigana and word spacing are out of
+  scope as of v0.6.0
+
+Development commands: `npm run lint:yorisoi -- <md>` (syntax detection) and
+`npm run vocab:yorisoi -- <md>` (vocabulary check). Worked examples with measured scores live in
+`examples/yorisoi/`.
 
 ## Auto-apply hook (when used as a plugin)
 
@@ -298,11 +345,21 @@ k16shikano's [日本語技術文書の文章規範](https://gist.github.com/k16s
 (the japanese-tech-writing skill), in particular its sections on banning LLM-ish empty phrases,
 eliminating redundancy, and structuring paragraphs and argumentation.
 
+The yorisoi skill draws on the following resources:
+
+- [Guidelines for Plain Japanese for Residency Support](https://www.moj.go.jp/isa/support/portal/plainjapanese_guideline.html) (August 2020) — the basis for the rewrite rules
+- [tanos.co.uk JLPT vocabulary lists](http://www.tanos.co.uk/jlpt/) (CC BY, unofficial estimates)
+- [NINJAL basic vocabulary survey data](https://mmsrv.ninjal.ac.jp/bvjsl84/) (CC BY 4.0)
+- [JEV vocabulary list](https://jhlee.sakura.ne.jp/JEV/) (redistribution prohibited; optional, user-supplied)
+- [jReadability](https://jreadability.net/) — the published formula behind the supplementary readability estimate
+
 ## Disclaimer
 
 - This Agent Skill and plugin are provided "AS IS", **without any warranty** as to the accuracy, completeness, or fitness for a particular purpose of their output.
 - Because meiseki **rewrites** text, the clarification process may alter the original meaning, nuance, or factual content. **Always review and verify the output yourself before using it.** Final responsibility for the content rests with the user.
 - Documents requiring strict precision — legal, medical, contractual, academic — are **out of scope** (see "What it fixes"). The author accepts no responsibility for outcomes arising from such uses.
+- The yorisoi skill's vocabulary-level labels ("roughly N4" etc.) are **estimates based on unofficial lists** and do not match any official JLPT standard.
+- The yorisoi skill follows the official guidelines but is **not an approved or certified tool**. Simplification can alter meaning. Before publishing rewritten output as official information (administrative procedures, disaster notices, etc.), **have it reviewed by qualified staff** (Japanese-language education or multicultural affairs officers).
 - The author and rights holders accept no liability for any direct or indirect damages arising from the use of, or inability to use, this Agent Skill and plugin (see `LICENSE` for details).
 - This Agent Skill and plugin depend on third-party OSS such as textlint. The behavior and security of those dependencies are governed by their respective providers' terms and licenses.
 
@@ -310,6 +367,8 @@ eliminating redundancy, and structuring paragraphs and argumentation.
 
 - Machine detection for E (formatting), G (hype words), and D (conciseness) uses [textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing) (textlint-ja, MIT License).
 - Thanks also to the authors and communities of [textlint](https://github.com/textlint/textlint) itself, [textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing), [textlint-rule-prh](https://github.com/textlint-rule/textlint-rule-prh), and every other OSS dependency. Each package is governed by its own license.
+- The yorisoi skill's vocabulary lists use Jonathan Waller's [tanos.co.uk JLPT lists](http://www.tanos.co.uk/jlpt/) (CC BY) via [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks) and [elzup/jlpt-word-list](https://github.com/elzup/jlpt-word-list) (MIT), and NINJAL's [basic vocabulary survey data](https://mmsrv.ninjal.ac.jp/bvjsl84/) (CC BY 4.0).
+- Morphological analysis for the vocabulary check uses [kuromoji.js](https://github.com/takuyaa/kuromoji.js) (Apache-2.0) and [kuromojin](https://github.com/azu/kuromojin) (MIT).
 
 ## License
 

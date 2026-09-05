@@ -13,11 +13,19 @@
 #   3 = skip  (対象外: .md でない・日本語なし・opt-out 指定・本文なし)
 #
 # stdout (終了コード 0/1 のとき):
-#   double_negative=<A(二重否定)の件数>
+#   double_negative=<主要ルール(既定: 二重否定)の件数>
 #   total=<総件数。ai-tech-writing-guideline の総括行は除く>
 #   summary=<L<line>:<ruleId> を最大 15 件>
 #
 # 設定の解決順: $MEISEKI_LINT_CONFIG > このスクリプト位置からの既定パス
+#
+# 別ルールセット(yorisoi 等)から再利用するための環境変数:
+#   MEISEKI_LINT_CONFIG        textlint 設定ファイル
+#   MEISEKI_LINT_PACKAGES      npx に渡す "pkg@ver" の空白区切りリスト
+#   MEISEKI_LINT_PRIMARY_RULE  主要ルールの ruleId 末尾一致(既定 no-double-negative-ja)
+#   MEISEKI_LINT_PRIMARY_MAX   主要ルールの許容件数(既定 0)
+#   MEISEKI_LINT_TOTAL_MAX     総件数の block 閾値(既定 3。これ以上で block)
+#   MEISEKI_LINT_NO_MASK=1     対象外領域のマスキングを行わない
 set -u
 
 FILE="${1:-}"
@@ -41,6 +49,12 @@ CORE_DIR=$(cd "$(dirname "$0")" && pwd)
 CONFIG="${MEISEKI_LINT_CONFIG:-$CORE_DIR/../.agents/skills/meiseki/references/textlint.config.json}"
 [ -f "$CONFIG" ] || exit 2
 
+# ルールセット差し替え用の環境変数(既定は meiseki 本体の構成)
+PACKAGES="${MEISEKI_LINT_PACKAGES:-textlint@14.8.4 textlint-rule-preset-ja-technical-writing@10.0.2 textlint-rule-preset-ai-writing@1.1.0 textlint-rule-prh@6.1.0}"
+PRIMARY_RULE="${MEISEKI_LINT_PRIMARY_RULE:-no-double-negative-ja}"
+PRIMARY_MAX="${MEISEKI_LINT_PRIMARY_MAX:-0}"
+TOTAL_MAX="${MEISEKI_LINT_TOTAL_MAX:-3}"
+
 # ---- 対象外領域のマスキング(SKILL.md §3 の決定論層実装) ----
 # 対象外領域を空行に置換した一時コピーを lint する。空行置換なので
 # 行番号は原文とずれず、summary の "L<line>" をそのまま使える。
@@ -50,6 +64,9 @@ MASKED=$(mktemp "${TMPDIR:-/tmp}/meiseki-mask.XXXXXX") || exit 2
 MASKED_MD="${MASKED}.md"
 trap 'rm -f "$MASKED" "$MASKED_MD"' EXIT
 
+if [ "${MEISEKI_LINT_NO_MASK:-0}" = "1" ]; then
+  cp "$FILE" "$MASKED_MD"
+else
 awk '
 BEGIN {
   in_fence = 0; in_math = 0; in_latex = 0; in_refs = 0; fence = ""
@@ -105,16 +122,16 @@ BEGIN {
   print line
 }
 ' "$FILE" > "$MASKED_MD" 2>/dev/null || cp "$FILE" "$MASKED_MD"
+fi
 
 # マスク後に日本語が残らなければ本文に検査対象がない
 grep -q '[ぁ-んァ-ヶ一-龯]' "$MASKED_MD" 2>/dev/null || exit 3
 
 # SKILL.md Step 2 と同一のピン止めバージョンで textlint を実行(指摘ありだと exit 1)
-RESULT=$(npx --min-release-age=7 --yes \
-  --package textlint@14.8.4 \
-  --package textlint-rule-preset-ja-technical-writing@10.0.2 \
-  --package textlint-rule-preset-ai-writing@1.1.0 \
-  --package textlint-rule-prh@6.1.0 \
+NPX_PKG_ARGS=""
+for p in $PACKAGES; do NPX_PKG_ARGS="$NPX_PKG_ARGS --package $p"; done
+# shellcheck disable=SC2086
+RESULT=$(npx --min-release-age=7 --yes $NPX_PKG_ARGS \
   textlint -c "$CONFIG" -f json "$MASKED_MD" 2>/dev/null)
 
 # JSON が取れなければ(オフライン・npx 失敗など)判定不能
@@ -122,7 +139,7 @@ printf '%s' "$RESULT" | jq -e 'type == "array"' >/dev/null 2>&1 || exit 2
 
 # G2(空虚な形容)・G3(空虚な動詞)も従来どおり集計に含める。学術文書の本文でも
 # 曖昧な表現は直す対象であり、術語として実質を持つ語を残す判断はスキル層が行う。
-DOUBLE_NEG=$(printf '%s' "$RESULT" | jq '[.[].messages[]? | select((.ruleId // "") | endswith("no-double-negative-ja"))] | length')
+DOUBLE_NEG=$(printf '%s' "$RESULT" | jq --arg r "$PRIMARY_RULE" '[.[].messages[]? | select((.ruleId // "") | endswith($r))] | length')
 # ai-tech-writing-guideline の総括行(【テクニカルライティング品質分析】…)は
 # 個別指摘の集計メッセージなので件数に数えない(SKILL.md §7)
 TOTAL=$(printf '%s' "$RESULT" | jq '[.[].messages[]? | select((.message // "") | startswith("【テクニカルライティング品質分析】") | not)] | length')
@@ -132,8 +149,8 @@ printf 'double_negative=%s\n' "$DOUBLE_NEG"
 printf 'total=%s\n' "$TOTAL"
 printf 'summary=%s\n' "$SUMMARY"
 
-# 受け入れ基準(SKILL.md §7): A(二重否定)は原則 0 件。軽微な指摘のみなら通す
-if [ "$DOUBLE_NEG" -eq 0 ] && [ "$TOTAL" -lt 3 ]; then
+# 受け入れ基準(SKILL.md §7): 主要ルール(既定: 二重否定)は原則 0 件。軽微な指摘のみなら通す
+if [ "$DOUBLE_NEG" -le "$PRIMARY_MAX" ] && [ "$TOTAL" -lt "$TOTAL_MAX" ]; then
   exit 0
 fi
 exit 1

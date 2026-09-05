@@ -21,7 +21,7 @@
 > 再現方法：プラグインルートで次のように実行するとスコアの素データ（指摘の JSON）が得られる。
 >
 > ```bash
-> npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c .agents/skills/meiseki/references/textlint.config.json -f json examples/01-retry.before.md
+> npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c .agents/skills/meiseki/references/textlint.config.json -f json examples/meiseki/01-retry.before.md
 > ```
 
 ---

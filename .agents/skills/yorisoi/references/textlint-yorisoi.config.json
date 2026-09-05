@@ -1,0 +1,35 @@
+{
+  "rules": {
+    "preset-ja-technical-writing": {
+      "no-double-negative-ja": true,
+      "sentence-length": { "max": 50 },
+      "max-ten": { "max": 3 },
+      "max-kanji-continuous-len": { "max": 4 },
+      "ja-no-redundant-expression": true,
+      "no-doubled-joshi": { "min_interval": 1 },
+      "no-doubled-conjunction": true,
+      "no-doubled-conjunctive-particle-ga": true,
+      "no-mix-dearu-desumasu": { "preferInBody": "ですます", "preferInList": "ですます" },
+
+      "ja-no-weak-phrase": false,
+
+      "arabic-kanji-numbers": false,
+      "ja-no-mixed-period": false,
+      "no-dropping-the-ra": false,
+      "no-exclamation-question-mark": false,
+      "no-nfd": false,
+
+      "ja-no-abusage": false,
+      "ja-no-successive-word": false,
+      "ja-unnatural-alphabet": false,
+      "max-comma": false,
+      "no-hankaku-kana": false,
+      "no-invalid-control-character": false,
+      "no-unmatched-pair": false,
+      "no-zero-width-spaces": false
+    },
+    "prh": {
+      "rulePaths": ["./prh-yorisoi.yml"]
+    }
+  }
+}

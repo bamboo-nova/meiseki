@@ -8,8 +8,8 @@
     {
       "name": "meiseki",
       "source": "./",
-      "version": "0.5.0",
-      "description": "AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直すプラグイン。LLM定型句の検出（prh辞書）、AI臭の体裁・誇張語の検出（preset-ai-writing）、段落レベルの冗長排除に対応。Claude Code と Codex CLI の両方で動く。",
+      "version": "0.6.0",
+      "description": "AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直すプラグイン。LLM定型句の検出（prh辞書）、AI臭の体裁・誇張語の検出（preset-ai-writing）、段落レベルの冗長排除に対応。やさしい日本語化スキル（meiseki:yorisoi）も同梱。Claude Code と Codex CLI の両方で動く。",
       "keywords": [
         "japanese",
         "clarity",

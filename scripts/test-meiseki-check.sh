@@ -67,17 +67,17 @@ STATS=$(lint "$TESTDIR/stats.md" | jq '[.[].messages[] | select(.ruleId == "prh"
 assert_eq "「帰無仮説は否定できない」を prh は検出しない(統計文脈の除外)" "0" "$STATS"
 
 # 単なる否定(二重でない)を誤検知しない
-GOOD=$(lint "examples/01-retry.after.md" | jq '[.[].messages[]] | length')
+GOOD=$(lint "examples/meiseki/01-retry.after.md" | jq '[.[].messages[]] | length')
 assert_eq "01-after(「再送するわけではありません」等)に誤検知なし" "0" "$GOOD"
-E08A=$(lint "examples/08-separated-double-negative.after.md" | jq '[.[].messages[]] | length')
+E08A=$(lint "examples/meiseki/08-separated-double-negative.after.md" | jq '[.[].messages[]] | length')
 assert_eq "08-after は指摘ゼロ" "0" "$E08A"
-E08B=$(lint "examples/08-separated-double-negative.before.md" | jq '[.[].messages[] | select(.ruleId == "prh")] | length')
+E08B=$(lint "examples/meiseki/08-separated-double-negative.before.md" | jq '[.[].messages[] | select(.ruleId == "prh")] | length')
 assert_eq "08-before は prh 3 件" "3" "$E08B"
 
 echo "Part 2: hook(meiseki-check.sh)"
 
 # 分離型二重否定×3(prh のみ、本家 A は 0 件)→ 合計 3 件で block
-cp examples/08-separated-double-negative.before.md "$TESTDIR/sep-dn.md"
+cp examples/meiseki/08-separated-double-negative.before.md "$TESTDIR/sep-dn.md"
 OUT=$(hook "$TESTDIR/sep-dn.md")
 assert_eq "分離型二重否定×3 の md は block" "block" "$(printf '%s' "$OUT" | jq -r '.decision // "none"')"
 

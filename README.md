@@ -70,18 +70,31 @@ meiseki/
 │   ├── hooks.json           # Claude Code 用 PostToolUse hook 定義
 │   └── codex-hooks.json     # Codex CLI 用 PostToolUse hook 定義
 ├── scripts/
-│   ├── meiseki-lint-core.sh     # 決定論層コア：マスキング + textlint + 閾値判定（ホスト非依存）
+│   ├── meiseki-lint-core.sh     # 決定論層コア：マスキング + textlint + 閾値判定（ホスト非依存。環境変数でルールセット差し替え可）
 │   ├── meiseki-check.sh         # Claude Code アダプタ：JSON 入出力と再実行ガード
 │   ├── codex-hook.sh            # Codex アダプタ：apply_patch エンベロープからパスを抽出して橋渡し
-│   └── test-meiseki-check.sh    # hook と prh 補完辞書の自動テスト（npm run test:hook）
+│   ├── yorisoi-vocab-check.js  # 語彙レベル判定のラッパー（本体はスキル同梱）
+│   ├── test-meiseki-check.sh    # hook と prh 補完辞書の自動テスト（npm run test:hook）
+│   └── test-yorisoi.sh         # yorisoi の検出・語彙判定の自動テスト（npm run test:yorisoi）
 ├── .agents/skills/          # Agent Skills 標準の配置（Claude Code と Codex が共用）
-│   └── meiseki/
-│       ├── SKILL.md         # LLM オーケストレーター本体
+│   ├── meiseki/
+│   │   ├── SKILL.md         # 明晰化スキルの LLM オーケストレーター
+│   │   └── references/
+│   │       ├── patterns.md             # 高負荷構文カタログ A–H
+│   │       ├── prh-llm-phrases.yml     # LLM 定型句の検出辞書（カテゴリ G・検出専用）
+│   │       └── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
+│   └── yorisoi/
+│       ├── SKILL.md         # やさしい日本語化スキルの LLM オーケストレーター
+│       ├── scripts/vocab-check.js      # 語彙レベル判定（形態素解析 + 同梱リスト照合）
 │       └── references/
-│           ├── patterns.md             # 高負荷構文カタログ A–H
-│           ├── prh-llm-phrases.yml     # LLM 定型句の検出辞書（カテゴリ G・検出専用）
-│           └── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
-├── package.json             # 開発用の npm run lint / test:hook を提供
+│           ├── patterns-yorisoi.md    # ガイドライン由来の書き換えカタログ YA–YH
+│           ├── prh-yorisoi.yml        # 受身・推測・敬語・表記規則の検出辞書
+│           ├── textlint-yorisoi.config.json
+│           └── vocab/                  # 語彙リスト（出典・ライセンスは同ディレクトリの README）
+├── examples/
+│   ├── meiseki/             # 明晰化の適用例（before/after 9 ペア + 実測 RLS）
+│   └── yorisoi/            # やさしい日本語化の適用例（before/after 3 ペア + 実測 YLS）
+├── package.json             # 開発用の npm run lint / lint:yorisoi / vocab:yorisoi / test:* を提供
 └── README.md
 ```
 
@@ -167,6 +180,34 @@ claude plugin install meiseki@bamboo-nova-ja-tools
 
 標準ではリライト後の**本文のみ**が返る。`「どこを直したか教えて」`と指定すると変更点も添える。
 `「スコアも出して」`と指定すると読解負荷スコア(before→after)を併記する。
+
+## やさしい日本語化スキル `meiseki:yorisoi`（v0.6.0 から）
+
+在留外国人や日本語学習者にも伝わる「やさしい日本語」への書き換えを行う第2のスキル。
+明晰化（meiseki）とは**対象読者が違う**。日本語ネイティブ向けの推敲は meiseki、
+日本語に不慣れな読者向けの書き換えは yorisoi を使う。発動例：
+
+- 「このお知らせをやさしい日本語にして」
+- 「外国人にもわかるように書き直して」
+- 「やさしい日本語かチェックして」（書き換えず判定だけ行う）
+
+設計は meiseki と同じ二層構成で、根拠に**公的な外部規範**を使う。
+
+- 準拠する規範：[在留支援のためのやさしい日本語ガイドライン](https://www.moj.go.jp/isa/support/portal/plainjapanese_guideline.html)（2020年8月）。
+  二重否定の禁止・受身や推測表現の回避・敬語の単純化・表記規則（西暦、
+  午前/午後、「〜」の禁止）などを、textlint と同梱の prh 辞書（`prh-yorisoi.yml`）で機械検出する
+- 語彙レベルの機械判定：同梱スクリプト（`scripts/yorisoi-vocab-check.js`）が
+  形態素解析（kuromoji.js。初回のみ自動取得）で本文を分解し、同梱の語彙リストと照合して
+  目標レベルを超える語を行位置つきで報告する。既定の目標は **N4 相当**（`「N3 で」`のように変更可）
+- **「N○相当」はすべて推定値**。JLPT の公式語彙リストは2010年以降非公開のため、
+  同梱リスト（tanos.co.uk 由来、CC BY）と国語研の基本語彙調査データ（CC BY 4.0）で近似している。
+  語彙表 JEV を自分で入手して置くと、判定に最優先で使われる（`references/vocab/README.md` 参照）
+- スコア：やさしさ負荷スコア（YLS。RLS と同型）で before→after を検算する
+- 言い換えできない重要語は `「余震＜＝後から来る地震＞」` の形式で残して説明する（ガイドライン準拠）
+- 自動適用 hook の**対象外**（オンデマンド専用）。ふりがな・分かち書きも v0.6.0 では対象外
+
+開発用コマンド：`npm run lint:yorisoi -- <md>`（構文検出）、`npm run vocab:yorisoi -- <md>`（語彙判定）。
+適用例と実測スコアは `examples/yorisoi/` にある。
 
 ## 自動適用 hook（プラグイン利用時）
 
@@ -296,11 +337,21 @@ k16shikano 氏の [日本語技術文書の文章規範](https://gist.github.com
 （japanese-tech-writing skill）を参考にした。
 とくに「LLM っぽい空句の禁止」「冗長の排除」「段落と論証の構成」の各節に拠っている。
 
+yorisoi スキルの設計は、次の資料に拠っている。
+
+- [在留支援のためのやさしい日本語ガイドライン](https://www.moj.go.jp/isa/support/portal/plainjapanese_guideline.html)（2020年8月）— 書き換え規則の根拠
+- [tanos.co.uk の JLPT 語彙リスト](http://www.tanos.co.uk/jlpt/)（CC BY・非公式の推定リスト）
+- [国語研『日本語教育のための基本語彙調査』データ](https://mmsrv.ninjal.ac.jp/bvjsl84/)（CC BY 4.0）
+- [語彙表 JEV](https://jhlee.sakura.ne.jp/JEV/)（二次配布禁止のため同梱せず、任意入手のオプション）
+- [jReadability](https://jreadability.net/) — 参考併記する読みやすさ近似値の公開式
+
 ## 免責事項
 
 - 本Agent Skillおよびプラグインは「現状有姿（AS IS）」で提供され、出力結果の正確性・完全性・特定目的への適合性について**いかなる保証もしません**。
 - meiseki は文章を**書き換える**ツールである以上、明晰化の過程で原文の意味・ニュアンス・事実関係が変わる可能性もあります。**出力は必ず利用者自身が確認・検証したうえで使用してください。** 最終的な内容の責任は利用者にあります。
 - 法務・医療・契約・論文など、表現の厳密さが要求される文書は**対象外**です（「何を直すか」参照）。これらの用途で生じた結果について作者は責任を負いません。
+- yorisoi スキルの語彙レベル判定（「N○相当」）は**非公式リストによる推定値**であり、JLPT の公式基準とは一致しません。
+- yorisoi スキルはガイドラインを参考に書き換えを行いますが、**公認・認証されたツールではありません**。やさしい日本語化の過程で意味の単純化が起こりえます。行政手続き・防災情報など公式に配布する文書に使う場合は、**必ず当事者（日本語教育や多文化共生の担当者等）による確認を経てください**。
 - 本Agent Skillおよびプラグインの使用または使用不能から生じた直接・間接のいかなる損害についても、作者および権利者は責任を負いません（詳細は `LICENSE` を参照）。
 - 本Agent Skillおよびプラグインは textlint 等の第三者 OSS に依存します。それら依存パッケージの動作・セキュリティについては各提供元の規約・ライセンスに従います。
 
@@ -308,6 +359,8 @@ k16shikano 氏の [日本語技術文書の文章規範](https://gist.github.com
 
 - E（体裁）・G（誇張語）・D（簡潔性）の機械検出には [textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)（textlint-ja、MIT License）を利用しています。
 - そのほか [textlint](https://github.com/textlint/textlint) 本体・[textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)・[textlint-rule-prh](https://github.com/textlint-rule/textlint-rule-prh) など、依存する各 OSS の作者・コミュニティに感謝します。各パッケージはそれぞれのライセンスに従います。
+- yorisoi スキルの語彙リストは、Jonathan Waller 氏の [tanos.co.uk JLPT リスト](http://www.tanos.co.uk/jlpt/)（CC BY）を [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks) と [elzup/jlpt-word-list](https://github.com/elzup/jlpt-word-list)（MIT）経由で、また国語研の [基本語彙調査データ](https://mmsrv.ninjal.ac.jp/bvjsl84/)（CC BY 4.0）を利用しています。
+- 語彙判定の形態素解析には [kuromoji.js](https://github.com/takuyaa/kuromoji.js)（Apache-2.0）と [kuromojin](https://github.com/azu/kuromojin)（MIT）を利用しています。
 
 ## ライセンス
 

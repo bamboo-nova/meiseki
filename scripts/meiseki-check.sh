@@ -55,13 +55,26 @@ emit_advisory() { # total summary
     '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
 }
 
-emit_block() { # dn total summary
+emit_block() { # dn total summary extra
   jq -n \
     --arg file "$FILE" \
     --arg dn "$1" \
     --arg total "$2" \
     --arg summary "$3" \
-    '{decision: "block", reason: "meiseki hook: \($file) は読解負荷の高い構文を含みます(二重否定 \($dn) 件を含む計 \($total) 件)。meiseki スキル(plugin: meiseki)を必ず呼び出し、SKILL.md のワークフロー(意味把握 → patterns.md A→H でリライト → 意味の検算 → やりすぎチェック)に従ってこのファイルをリライトしてから作業を続けてください。textlint の指摘: \($summary)"}'
+    --arg extra "${4:-}" \
+    '{decision: "block", reason: "meiseki hook: \($file) は読解負荷の高い構文を含みます(二重否定 \($dn) 件を含む計 \($total) 件)。meiseki スキル(plugin: meiseki)を必ず呼び出し、SKILL.md のワークフロー(意味把握 → patterns.md A→H でリライト → 意味の検算 → やりすぎチェック)に従ってこのファイルをリライトしてから作業を続けてください。textlint の指摘: \($summary)\($extra)"}'
+}
+
+# カテゴリ I(文字化け)はリライトで解決できないため block しない。
+# 警告(additionalContext)でユーザーへの確認を促すだけにする。
+emit_integrity_advisory() { # count summary
+  jq -n --arg ctx "meiseki hook: ${FILE} に文字化けの疑いが $1 件あります($2)。NFD 濁点分離・不正な制御文字・ゼロ幅スペース・半角カナ・U+FFFD の類です。リライトでは直さず、対応の要否をユーザーに確認してください。制御文字や半角カナが意図的なケースもあります。" \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
+}
+
+emit_encoding_advisory() {
+  jq -n --arg ctx "meiseki hook: ${FILE} は UTF-8 として読めません(Shift_JIS 等の別エンコーディングの可能性)。このままでは文字化けの恐れがあるため、エンコーディングの扱いをユーザーに確認してください。textlint 検査はスキップしました。" \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
 }
 
 append_state() { # decision total dn summary
@@ -114,18 +127,34 @@ fi
 # ---- コア実行 ----
 OUT=$(MEISEKI_LINT_CONFIG="${MEISEKI_LINT_CONFIG:-}" "$CORE" "$FILE")
 RC=$?
+# 4=文字化けの疑い(UTF-8 として不正) は block せず警告のみ
+if [ "$RC" = "4" ]; then
+  emit_encoding_advisory
+  exit 0
+fi
 # 2=判定不能(オフライン等) / 3=対象外 は書き込みを妨げない
 [ "$RC" = "0" ] || [ "$RC" = "1" ] || exit 0
 
 DOUBLE_NEG=$(printf '%s\n' "$OUT" | sed -n 's/^double_negative=//p')
 TOTAL=$(printf '%s\n' "$OUT" | sed -n 's/^total=//p')
 SUMMARY=$(printf '%s\n' "$OUT" | sed -n 's/^summary=//p')
+INTEGRITY=$(printf '%s\n' "$OUT" | sed -n 's/^integrity=//p')
+INTEGRITY_SUMMARY=$(printf '%s\n' "$OUT" | sed -n 's/^integrity_summary=//p')
+[ -n "$INTEGRITY" ] || INTEGRITY=0
 
 if [ "$RC" = "0" ]; then
   append_state pass "$TOTAL" "$DOUBLE_NEG" "-"
+  # 読解負荷は基準内でも、文字化けの疑いがあれば警告する(block はしない)
+  if [ "$INTEGRITY" -gt 0 ] 2>/dev/null; then
+    emit_integrity_advisory "$INTEGRITY" "$INTEGRITY_SUMMARY"
+  fi
   exit 0
 fi
 
 append_state block "$TOTAL" "$DOUBLE_NEG" "$SUMMARY"
-emit_block "$DOUBLE_NEG" "$TOTAL" "$SUMMARY"
+EXTRA=""
+if [ "$INTEGRITY" -gt 0 ] 2>/dev/null; then
+  EXTRA="。また、文字化けの疑いが ${INTEGRITY} 件あります(${INTEGRITY_SUMMARY})。こちらはリライトで直さず、対応の要否をユーザーに確認してください"
+fi
+emit_block "$DOUBLE_NEG" "$TOTAL" "$SUMMARY" "$EXTRA"
 exit 0

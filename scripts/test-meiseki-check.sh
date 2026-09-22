@@ -182,5 +182,50 @@ assert_eq "別セッションの同一内容は block しない" "none" "$(print
 assert_eq "別セッションの同一内容は additionalContext で警告する" "true" "$(printf '%s' "$OUTX" | jq -r '.hookSpecificOutput.additionalContext != null')"
 
 echo ""
+echo "Part 3: カテゴリ I(文字化け) — 警告のみで block しない"
+
+# NFD 分離・ゼロ幅スペース・制御文字・半角カナ・U+FFFD の 5 種を含み、読解負荷は基準内の md
+# (エディタでの再保存による正規化・除去を避けるため、対象文字はバイト列で書く)
+printf '# 文字化けサンプル\n\nNFD分離: これは\xe3\x83\x9b\xe3\x82\x9aイントの説明です。\n\nゼロ幅スペース: ここに\xe2\x80\x8b見えない文字がある。\n\n制御文字: ベル文字\x07が混入している。\n\n置換文字: 変換に失敗した\xef\xbf\xbd文字がある。\n\n半角カナ: 警告 \xef\xbe\x83\xef\xbd\xba\xef\xbe\x9e\xef\xbd\xba\xef\xbe\x9e\xef\xbe\x86 にするのが自然です。\n' > "$TESTDIR/moji.md"
+OUTM=$(hook "$TESTDIR/moji.md")
+assert_eq "I 指摘 5 件でも block しない(RLS/閾値に数えない)" "none" "$(printf '%s' "$OUTM" | jq -r '.decision // "none"')"
+assert_eq "I 指摘は additionalContext で警告する" "true" "$(printf '%s' "$OUTM" | jq -r '.hookSpecificOutput.additionalContext != null')"
+assert_eq "警告に件数(5 件)が入る" "true" "$(printf '%s' "$OUTM" | jq -r '.hookSpecificOutput.additionalContext | contains("5 件")')"
+
+# コア単体: I 指摘は integrity= に分離され、total= に混ざらない
+OUTC=$(bash scripts/meiseki-lint-core.sh "$TESTDIR/moji.md")
+assert_eq "コアの integrity=5" "5" "$(printf '%s\n' "$OUTC" | sed -n 's/^integrity=//p')"
+assert_eq "コアの total=0(I を数えない)" "0" "$(printf '%s\n' "$OUTC" | sed -n 's/^total=//p')"
+
+# 読解負荷 block と I 指摘の同居: block しつつ reason に I の注記が付く
+printf '# t\n\nこの案は読めなくもない。この\xef\xbf\xbdは化けている。\n' > "$TESTDIR/moji-mix.md"
+OUTMX=$(hook "$TESTDIR/moji-mix.md")
+assert_eq "読解負荷があれば従来どおり block する" "block" "$(printf '%s' "$OUTMX" | jq -r '.decision // "none"')"
+assert_eq "block の reason に文字化けの注記が付く" "true" "$(printf '%s' "$OUTMX" | jq -r '.reason | contains("文字化けの疑い")')"
+assert_eq "I 指摘は block の件数に数えない(計 1 件)" "true" "$(printf '%s' "$OUTMX" | jq -r '.reason | contains("計 1 件")')"
+
+# UTF-8 として不正(Shift_JIS): コアは exit 4、hook は警告のみ
+printf '# タイトル\n\nこれは日本語の本文です。\n' | iconv -f UTF-8 -t SHIFT_JIS > "$TESTDIR/sjis.md"
+bash scripts/meiseki-lint-core.sh "$TESTDIR/sjis.md" >/dev/null 2>&1
+assert_eq "SJIS ファイルはコアが exit 4" "4" "$?"
+
+# opt-out は UTF-8 妥当性検査より優先される(マーカーは ASCII なので SJIS でも読める)
+{ cat "$TESTDIR/sjis.md"; printf '\n<!-- meiseki-disable -->\n'; } > "$TESTDIR/sjis-optout.md"
+bash scripts/meiseki-lint-core.sh "$TESTDIR/sjis-optout.md" >/dev/null 2>&1
+assert_eq "opt-out した SJIS ファイルは警告せず skip (exit 3)" "3" "$?"
+
+# 回帰: 1KB 超の正当な UTF-8 を exit 4 と誤判定しない。macOS の iconv は
+# 出力先が /dev/null だと約 1KB 超の出力で ENOTTY で失敗する(コアの回避策の検証)
+i=0; : > "$TESTDIR/big-utf8.md"
+printf '# 見出し\n\n' > "$TESTDIR/big-utf8.md"
+while [ $i -lt 60 ]; do printf 'この文書は正当な文字コードで書かれた本文です。\n' >> "$TESTDIR/big-utf8.md"; i=$((i+1)); done
+bash scripts/meiseki-lint-core.sh "$TESTDIR/big-utf8.md" >/dev/null 2>&1
+RC_BIG=$?
+assert_eq "1KB 超の正当な UTF-8 は exit 4 にならない" "false" "$([ "$RC_BIG" = "4" ] && echo true || echo false)"
+OUTS=$(hook "$TESTDIR/sjis.md")
+assert_eq "SJIS ファイルは block しない" "none" "$(printf '%s' "$OUTS" | jq -r '.decision // "none"')"
+assert_eq "SJIS ファイルはエンコーディング警告を出す" "true" "$(printf '%s' "$OUTS" | jq -r '.hookSpecificOutput.additionalContext | contains("UTF-8 として読めません")')"
+
+echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

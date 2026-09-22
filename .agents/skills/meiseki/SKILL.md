@@ -54,6 +54,24 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
 - 出力 JSON の各 `messages[]` から `ruleId`（例 `preset-ja-technical-writing/no-double-negative-ja`）と
   `line` / `column` を読み、高負荷箇所を特定する。
 
+textlint の指摘のうちカテゴリ I（文字化け）は A〜H と分けて記録する。
+対象は `no-nfd`・`no-invalid-control-character`・`no-zero-width-spaces`・`no-hankaku-kana` の指摘と、
+prh のメッセージに「I 文字化け」を含む指摘（U+FFFD 検出）。
+I はリライト対象ではなく、Step 8 で報告してユーザーに対応の要否を確認する。RLS にも数えない（§7）。
+
+対象が Markdown 文書の場合は、同じ一時ファイルに markdownlint も実行し、before の違反一覧を記録する。
+これは Markdown 構文のリグレッションガード（書き換えで構文を壊していないことの検証）に使う。
+
+```bash
+# markdownlint を実行（Skill 同梱の設定を使う。Markdown 構文のリグレッションガード）
+npx --min-release-age=7 --yes --package markdownlint-cli@0.49.1 markdownlint --config "<SKILL_DIR>/references/markdownlint.config.jsonc" "<INPUT_MD>"
+```
+
+- textlint 用のマスキング（コードブロック除去等）は適用しない。markdownlint は生の Markdown 構造そのものを検査する。
+- 違反があると終了コード 1 を返し、`file:line[:column] error MD###/alias 説明` の形式で出力される。
+  各行の ruleId と行番号を before として記録する。
+- npx が失敗した場合（オフライン等）は markdownlint をスキップして続ける（フェイルオープン。textlint と同じ扱い）。
+
 ### Step 3. 読解負荷スコア(before) を算出する
 §7 の式で before スコアを出す。`no-double-negative-ja`（A）の件数は特に記録しておく。
 
@@ -85,6 +103,10 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
 リライト後の本文を再び Step 2 の手順で textlint にかけ、§7 のスコア(after) を出す。
 - **after < before** になっていなければ直し残しがある。指摘の残った箇所に戻る。
 - **A（二重否定）は原則 0 件**にする。意図的な litotes だけ例外として残す（§5 参照）。
+- 対象が Markdown 文書の場合は markdownlint も再実行する。判定基準は
+  「**after の違反が、before に存在しない新規違反を含まないこと**」。
+  新規違反は書き換えで構文を壊した箇所なので、修正して再検証する。
+  before から存在していた違反はここでは直さない（§5「明晰化以外は触らない」原則に従う）。
 
 ### Step 7. やりすぎチェック（ガードレール照合）
 §5 のガードレールに 1 つずつ照らし、過剰な書き換え・声の注入・トーン破壊がないか点検する。
@@ -93,6 +115,11 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
 
 ### Step 8. 本文だけ返す
 §2 の方針どおり、標準ではリライト後の本文のみを出力する。
+markdownlint が before から検出していた既存違反があるときだけ、本文のあとに
+「markdown lint 上の既存指摘」として ruleId と行番号を簡潔に添える（修正はしない）。
+カテゴリ I（文字化け）の指摘があるときは、本文のあとに行番号つきで報告し、対応の要否をユーザーに確認する。
+制御文字や特殊文字が意図的なケースがあるため、勝手に削除・置換しない。
+U+FFFD（�）は元の文字が失われた痕跡なので、推測で復元せず正しい原文の提供を求める。
 
 ## 5. ガードレール（やってはいけないこと）
 
@@ -114,6 +141,9 @@ npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-
   持つ場合（実測値を伴う「大幅に」など）は残す。
 - **段落の反復（H）は「情報量が増えない繰り返し」だけ削る。** 主張・例・根拠・例外は
   ひとつも消さない。段落分割で文の順序・論理の流れは変えない。
+- **文字化け（カテゴリ I）を推測で直さない。** NFD 分離・制御文字・ゼロ幅スペース・半角カナは
+  意図的な場合があり、U+FFFD は元の文字の情報が失われている。検出したら報告し、対応はユーザーの判断に委ねる。
+  半角カナだけは全角化という機械的な修正候補があるが、それもユーザーの確認を経てから行う。
 
 ## 6. 最終判断基準
 
@@ -150,6 +180,9 @@ RLS = Σ(カテゴリ件数 × 重み) ÷ 本文の文数 × 100
   - 同一箇所を `ja-no-redundant-expression` と `ai-tech-writing-guideline` が両方拾ったら **D に 1 回だけ**。
   - `ai-tech-writing-guideline` の総括行（「【テクニカルライティング品質分析】…」で始まるメッセージ）は
     個別指摘の集計であり、**件数に数えない**。
+- カテゴリ I（文字化け）は **RLS に数えない**：`no-nfd`・`no-invalid-control-character`・
+  `no-zero-width-spaces`・`no-hankaku-kana`、および prh のメッセージに「I 文字化け」を含む指摘（U+FFFD）。
+  読解負荷ではなくデータ破損の検出であり、扱いは §4 Step 8 に従う（報告のみ・ユーザー確認）。
 - **受け入れ基準：after < before を必須**、かつ **A（二重否定）は原則 0 件**。
 - 重み（特に A=3 の比率）・一文長(90字)・F の扱いは、実ドキュメントで較正して調整してよい。
 

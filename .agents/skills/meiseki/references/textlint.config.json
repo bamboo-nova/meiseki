@@ -11,21 +11,22 @@
       "no-doubled-conjunctive-particle-ga": true,
       "ja-no-weak-phrase": true,
 
+      "no-nfd": true,
+      "no-invalid-control-character": true,
+      "no-zero-width-spaces": true,
+      "no-hankaku-kana": true,
+
       "arabic-kanji-numbers": false,
       "no-mix-dearu-desumasu": false,
       "ja-no-mixed-period": false,
       "no-dropping-the-ra": false,
       "no-exclamation-question-mark": false,
-      "no-nfd": false,
 
       "ja-no-abusage": false,
       "ja-no-successive-word": false,
       "ja-unnatural-alphabet": false,
       "max-comma": false,
-      "no-hankaku-kana": false,
-      "no-invalid-control-character": false,
-      "no-unmatched-pair": false,
-      "no-zero-width-spaces": false
+      "no-unmatched-pair": false
     },
     "preset-ai-writing": {
       "no-ai-list-formatting": true,

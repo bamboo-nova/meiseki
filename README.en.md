@@ -83,7 +83,8 @@ meiseki/
 │   │   └── references/
 │   │       ├── patterns.md             # High-load syntax catalog A–H
 │   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
-│   │       └── textlint.config.json    # textlint config narrowed to rules that affect reading load
+│   │       ├── textlint.config.json    # textlint config narrowed to rules that affect reading load
+│   │       └── markdownlint.config.jsonc # Minimal rule set for the Markdown-syntax regression guard
 │   └── yorisoi/
 │       ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
 │       ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
@@ -94,14 +95,15 @@ meiseki/
 │           └── vocab/                  # Vocabulary lists (sources and licenses in its README)
 ├── examples/
 │   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
-│   └── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
-├── package.json             # Provides npm run lint / lint:yorisoi / vocab:yorisoi / test:* for development
+│   ├── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
+│   └── markdownlint/        # Markdown-syntax check examples (samples firing all 13 rules)
+├── package.json             # Provides npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* for development
 └── README.md
 ```
 
 ## Requirements
 
-* Node.js installed
+- Node.js installed
 
 ## Installation
 
@@ -183,6 +185,19 @@ Just hand the target Japanese text to the skill. Example triggers (in Japanese):
 By default only the **rewritten body text** is returned. Say「どこを直したか教えて」("tell me what you changed") to get the list of changes as well.
 Say「スコアも出して」("show the score too") to include the reading-load score (before→after).
 
+Since v0.7.0, Markdown documents also get a syntax check via markdownlint (run via `npx`).
+Both the before and after versions are linted, so the rewrite is mechanically guaranteed not to
+break Markdown syntax (list markers, blank lines, headings, etc.) — a regression guard.
+Pre-existing violations are not fixed; they are only reported at the end. If `npx` is unavailable,
+the check is skipped (fail-open, same as textlint). The rule set lives in
+`references/markdownlint.config.jsonc`.
+Manual run: `npm run lint:md -- <md>`.
+
+Also since v0.7.0, mojibake is detected (category I: NFD-decomposed kana, control characters,
+zero-width spaces, garbled half-width katakana, U+FFFD). These are reported instead of rewritten, and the user decides how
+to handle them — control characters can be intentional, and U+FFFD marks a character whose
+original is lost, so guessing a replacement would fabricate meaning.
+
 ## Plain Japanese skill `meiseki:yorisoi` (since v0.6.0)
 
 A second skill that rewrites documents into "yorisoi nihongo" (plain Japanese) for foreign
@@ -260,6 +275,12 @@ Claude Writes / Edits report.md
   re-writing identical content replays the previous judgment without running textlint.
   Even in a different session (e.g. after a restart), content already blocked gets a warning only and is not re-blocked.
 - **Fail-open**: in environments where textlint cannot run (offline, etc.), writes are never blocked.
+- **Mojibake check (since v0.7.0)**: NFD-decomposed kana, invalid control characters,
+  zero-width spaces, garbled half-width katakana (e.g. "ﾃｺﾞｺﾞﾆ", a common LLM output glitch),
+  and U+FFFD (�) trigger a warning (additionalContext) instead of a block,
+  asking the user how to proceed — a rewrite cannot fix these, and control characters or
+  half-width kana are sometimes intentional. Files that are not valid UTF-8 (e.g. Shift_JIS) get the same warning.
+  None of these count toward RLS or the block threshold.
 - **Disabling**: set the environment variable `MEISEKI_HOOK_DISABLE=1`, or disable the plugin itself.
   Per file, add `meiseki: skip` to the frontmatter or write `<!-- meiseki-disable -->` anywhere in
   the body to exclude just that file.

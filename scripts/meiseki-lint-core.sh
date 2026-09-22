@@ -11,11 +11,14 @@
 #   1 = block (要リライト。stdout に集計を出力)
 #   2 = 判定不能(npx 失敗・JSON 不正など。アダプタは素通しにする)
 #   3 = skip  (対象外: .md でない・日本語なし・opt-out 指定・本文なし)
+#   4 = 文字化けの疑い(UTF-8 として不正。lint 不能。アダプタは警告に変換する)
 #
 # stdout (終了コード 0/1 のとき):
 #   double_negative=<主要ルール(既定: 二重否定)の件数>
-#   total=<総件数。ai-tech-writing-guideline の総括行は除く>
-#   summary=<L<line>:<ruleId> を最大 15 件>
+#   total=<総件数。ai-tech-writing-guideline の総括行とカテゴリ I(文字化け)は除く>
+#   summary=<L<line>:<ruleId> を最大 15 件(カテゴリ I は除く)>
+#   integrity=<カテゴリ I(文字化け: NFD/制御文字/ゼロ幅/U+FFFD)の件数。RLS・block 閾値に数えない>
+#   integrity_summary=<カテゴリ I の L<line>:<ruleId> を最大 15 件>
 #
 # 設定の解決順: $MEISEKI_LINT_CONFIG > このスクリプト位置からの既定パス
 #
@@ -36,14 +39,30 @@ case "$FILE" in
 esac
 [ -f "$FILE" ] || exit 3
 
-# 日本語(ひらがな・カタカナ・漢字)を含まないファイルは対象外
-grep -q '[ぁ-んァ-ヶ一-龯]' "$FILE" 2>/dev/null || exit 3
-
 # ファイル単位 opt-out(frontmatter は先頭 30 行の簡易判定、マーカーは全文有効)
+# UTF-8 妥当性検査より前に行う: opt-out は「このファイルに関与しない」の意思
+# 表示であり、エンコーディング警告も含めて抑止する。マーカーは ASCII なので
+# Shift_JIS 等のファイルでもこの grep は機能する。
 if head -n 30 "$FILE" 2>/dev/null | grep -qE '^meiseki:[[:space:]]*(skip|false)[[:space:]]*$' \
    || grep -qE '<!--[[:space:]]*meiseki-disable[[:space:]]*-->' "$FILE" 2>/dev/null; then
   exit 3
 fi
+
+# カテゴリ I(整合性): UTF-8 として不正なファイルは文字化けの可能性が高い
+# (Shift_JIS 等の別エンコーディング)。textlint でも正しく読めないため、
+# lint せず exit 4 で報告する(アダプタは警告に変換する)。
+# この検査は日本語判定より前に行う。SJIS の日本語は UTF-8 の grep に
+# マッチせず、後段では「日本語なし」として黙って skip されてしまうため。
+# 注意: iconv の stdout を /dev/null に直結してはならない。macOS の iconv は
+# 出力先が /dev/null で出力が約 1KB を超えると、正当な UTF-8 でも
+# ENOTTY(Inappropriate ioctl for device)で失敗する。パイプ経由なら正常。
+if command -v iconv >/dev/null 2>&1; then
+  iconv -f UTF-8 -t UTF-8 "$FILE" 2>/dev/null | cat >/dev/null 2>&1
+  [ "${PIPESTATUS[0]}" = "0" ] || exit 4
+fi
+
+# 日本語(ひらがな・カタカナ・漢字)を含まないファイルは対象外
+grep -q '[ぁ-んァ-ヶ一-龯]' "$FILE" 2>/dev/null || exit 3
 
 CORE_DIR=$(cd "$(dirname "$0")" && pwd)
 CONFIG="${MEISEKI_LINT_CONFIG:-$CORE_DIR/../.agents/skills/meiseki/references/textlint.config.json}"
@@ -140,14 +159,26 @@ printf '%s' "$RESULT" | jq -e 'type == "array"' >/dev/null 2>&1 || exit 2
 # G2(空虚な形容)・G3(空虚な動詞)も従来どおり集計に含める。学術文書の本文でも
 # 曖昧な表現は直す対象であり、術語として実質を持つ語を残す判断はスキル層が行う。
 DOUBLE_NEG=$(printf '%s' "$RESULT" | jq --arg r "$PRIMARY_RULE" '[.[].messages[]? | select((.ruleId // "") | endswith($r))] | length')
+
+# カテゴリ I(文字化け)の識別: 専用ルール 3 つ、または prh の
+# 「I 文字化け」マーカー(prh-llm-phrases.yml の I 補完セクション)を含む指摘。
+# I はリライトで解決できない(ユーザーの判断か原文が必要)ため、
+# total/summary から除外して block 閾値の意味論を「読解負荷」に保つ。
+IS_I='(((.ruleId // "") | (endswith("no-nfd") or endswith("no-invalid-control-character") or endswith("no-zero-width-spaces") or endswith("no-hankaku-kana"))) or ((.message // "") | contains("I 文字化け")))'
 # ai-tech-writing-guideline の総括行(【テクニカルライティング品質分析】…)は
 # 個別指摘の集計メッセージなので件数に数えない(SKILL.md §7)
-TOTAL=$(printf '%s' "$RESULT" | jq '[.[].messages[]? | select((.message // "") | startswith("【テクニカルライティング品質分析】") | not)] | length')
-SUMMARY=$(printf '%s' "$RESULT" | jq -r '[.[].messages[]? | select((.message // "") | startswith("【テクニカルライティング品質分析】") | not) | "L\(.line):\(.ruleId // "?")"] | .[0:15] | join(", ")')
+NOT_SUMMARY_ROW='((.message // "") | startswith("【テクニカルライティング品質分析】") | not)'
+
+INTEGRITY=$(printf '%s' "$RESULT" | jq '[.[].messages[]? | select('"$IS_I"')] | length')
+INTEGRITY_SUMMARY=$(printf '%s' "$RESULT" | jq -r '[.[].messages[]? | select('"$IS_I"') | "L\(.line):\(.ruleId // "?")"] | .[0:15] | join(", ")')
+TOTAL=$(printf '%s' "$RESULT" | jq '[.[].messages[]? | select('"$NOT_SUMMARY_ROW"' and (('"$IS_I"') | not))] | length')
+SUMMARY=$(printf '%s' "$RESULT" | jq -r '[.[].messages[]? | select('"$NOT_SUMMARY_ROW"' and (('"$IS_I"') | not)) | "L\(.line):\(.ruleId // "?")"] | .[0:15] | join(", ")')
 
 printf 'double_negative=%s\n' "$DOUBLE_NEG"
 printf 'total=%s\n' "$TOTAL"
 printf 'summary=%s\n' "$SUMMARY"
+printf 'integrity=%s\n' "$INTEGRITY"
+printf 'integrity_summary=%s\n' "$INTEGRITY_SUMMARY"
 
 # 受け入れ基準(SKILL.md §7): 主要ルール(既定: 二重否定)は原則 0 件。軽微な指摘のみなら通す
 if [ "$DOUBLE_NEG" -le "$PRIMARY_MAX" ] && [ "$TOTAL" -lt "$TOTAL_MAX" ]; then

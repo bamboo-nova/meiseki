@@ -82,7 +82,8 @@ meiseki/
 │   │   └── references/
 │   │       ├── patterns.md             # 高負荷構文カタログ A–H
 │   │       ├── prh-llm-phrases.yml     # LLM 定型句の検出辞書（カテゴリ G・検出専用）
-│   │       └── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
+│   │       ├── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
+│   │       └── markdownlint.config.jsonc # Markdown 構文のリグレッションガード用の最小ルールセット
 │   └── yorisoi/
 │       ├── SKILL.md         # やさしい日本語化スキルの LLM オーケストレーター
 │       ├── scripts/vocab-check.js      # 語彙レベル判定（形態素解析 + 同梱リスト照合）
@@ -93,14 +94,15 @@ meiseki/
 │           └── vocab/                  # 語彙リスト（出典・ライセンスは同ディレクトリの README）
 ├── examples/
 │   ├── meiseki/             # 明晰化の適用例（before/after 9 ペア + 実測 RLS）
-│   └── yorisoi/            # やさしい日本語化の適用例（before/after 3 ペア + 実測 YLS）
-├── package.json             # 開発用の npm run lint / lint:yorisoi / vocab:yorisoi / test:* を提供
+│   ├── yorisoi/            # やさしい日本語化の適用例（before/after 3 ペア + 実測 YLS）
+│   └── markdownlint/        # Markdown 構文検査の適用例（全13ルールの発火サンプル）
+├── package.json             # 開発用の npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* を提供
 └── README.md
 ```
 
 ## 必要環境
 
-* Node.js がインストールされていること
+- Node.js がインストールされていること
 
 ## インストール
 
@@ -181,6 +183,17 @@ claude plugin install meiseki@bamboo-nova-ja-tools
 標準ではリライト後の**本文のみ**が返る。`「どこを直したか教えて」`と指定すると変更点も添える。
 `「スコアも出して」`と指定すると読解負荷スコア(before→after)を併記する。
 
+v0.7.0 から、対象が Markdown 文書のときは markdownlint による構文検査が加わる（npx で都度実行）。
+書き換えの前後両方を検査し、「リライトで Markdown 構文（リスト記号・空行・見出し等）を壊していない」
+ことを機械的に保証する（リグレッションガード方式）。元からある違反は修正せず、末尾で報告だけ行う。
+npx が使えない環境では検査をスキップする（フェイルオープン。textlint と同じ扱い）。
+設定は `references/markdownlint.config.jsonc` で、手動実行は `npm run lint:md -- <md>`。
+
+同じく v0.7.0 から文字化けも検出する（カテゴリ I。NFD 濁点分離・制御文字・ゼロ幅スペース・半角カナの化け・U+FFFD）。
+これらはリライトせずに報告し、対応の要否をユーザーに確認する。
+勝手に直さないのは、制御文字や半角カナには運用上意図的なケースがあるため。
+U+FFFD は元の文字が失われていて推測復元が危険なため、正しい原文の提供を求める。
+
 ## やさしい日本語化スキル `meiseki:yorisoi`（v0.6.0 から）
 
 在留外国人や日本語学習者にも伝わる「やさしい日本語」への書き換えを行う第2のスキル。
@@ -252,6 +265,11 @@ Claude が report.md を Write / Edit
   同一内容の再書き込みは textlint を実行せず前回判定をリプレイする。
   別セッション（再起動後など）でも block 済みの同一内容には警告のみで再 block しない。
 - **フェイルオープン**：textlint が実行できない環境（オフライン等）では書き込みを妨げない。
+- **文字化け検査（v0.7.0 から）**：NFD 濁点分離・不正な制御文字・ゼロ幅スペース・半角カナの化け
+  （例「ﾃｺﾞｺﾞﾆ」）・U+FFFD（�）を検出すると、block せず警告（additionalContext）でユーザーへの確認を促す。
+  リライトでは解決できず、制御文字や半角カナが意図的なケースもあるため。
+  UTF-8 として読めないファイル（Shift_JIS 等）も同様に警告する。
+  これらは RLS・block 閾値に数えない。
 - **無効化**：環境変数 `MEISEKI_HOOK_DISABLE=1`、またはプラグイン自体の無効化。
   ファイル単位では frontmatter に `meiseki: skip`、または本文のどこかに
   `<!-- meiseki-disable -->` と書くとそのファイルだけ検査対象から外れる。

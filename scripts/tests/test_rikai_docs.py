@@ -141,7 +141,10 @@ class SkillDocsTest(unittest.TestCase):
     def test_language_fallback_and_study_body(self):
         skill = read("SKILL.md")
         self.assertIn("依頼から言語を判断できない場合（ファイルのパスだけを渡された場合など）は、日本語を使う。", skill)
-        self.assertIn("本文（導入と還流レポート）は、ユーザーの言語によらず日本語で書く。", read("references", "study-format.md"))
+        fmt = read("references", "study-format.md")
+        self.assertNotIn("ユーザーの言語によらず日本語で書く", fmt)
+        self.assertIn("本文（導入と還流レポート）は、ユーザーの言語で書く", fmt)
+        self.assertIn("Writer feedback report", fmt)
 
     def test_missing_script_characters_are_fixed_with_the_font(self):
         skill = read("SKILL.md")

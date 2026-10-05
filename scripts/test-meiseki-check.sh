@@ -91,6 +91,9 @@ assert_eq "英語 md は素通り" "" "$(hook "$TESTDIR/english.md")"
 cp "$TESTDIR/sep-dn.md" "$TESTDIR/CLAUDE.md"
 assert_eq "除外パス(CLAUDE.md)は素通り" "" "$(hook "$TESTDIR/CLAUDE.md")"
 
+cp "$TESTDIR/sep-dn.md" "$TESTDIR/foo.study.md"
+assert_eq "学習ノート(foo.study.md)は素通り" "" "$(hook "$TESTDIR/foo.study.md")"
+
 assert_eq "MEISEKI_HOOK_DISABLE=1 で素通り" "" "$(MEISEKI_HOOK_DISABLE=1 hook "$TESTDIR/sep-dn.md")"
 
 # ファイル単位 opt-out
@@ -180,6 +183,22 @@ assert_eq "3 回目は additionalContext で警告する" "true" "$(printf '%s' 
 OUTX=$(hook "$TESTDIR/sep-dn.md" "othersession$$")
 assert_eq "別セッションの同一内容は block しない" "none" "$(printf '%s' "$OUTX" | jq -r '.decision // "none"')"
 assert_eq "別セッションの同一内容は additionalContext で警告する" "true" "$(printf '%s' "$OUTX" | jq -r '.hookSpecificOutput.additionalContext != null')"
+
+# block 上限(2 回)に達した後も、警告の中身はその時点の検査結果にする。
+# (上限後に検査を飛ばして最後の block の指摘を出し続けると、直したファイルにも古い指摘が「残っています」と出る)
+OLD_TOTAL=$(bash scripts/meiseki-lint-core.sh "$TESTDIR/sep-dn.md" | sed -n 's/^total=//p')
+printf 'この関数は入力を検証します。検証に失敗した場合は、エラーを返します。\n' > "$TESTDIR/sep-dn.md"
+assert_eq "上限後に直したファイルは何も出さない(古い指摘を出し続けない)" "" "$(hook "$TESTDIR/sep-dn.md")"
+printf 'この手法は非常に優れています。この仕組みは不可欠です。この評価は極めて包括的です。\n' > "$TESTDIR/sep-dn.md"
+NEW_TOTAL=$(bash scripts/meiseki-lint-core.sh "$TESTDIR/sep-dn.md" | sed -n 's/^total=//p')
+assert_eq "(前提) 上限後に書いた内容の指摘件数は、最後の block と異なる" "true" "$([ "$NEW_TOTAL" != "$OLD_TOTAL" ] && echo true || echo false)"
+OUTC2=$(hook "$TESTDIR/sep-dn.md")
+assert_eq "上限後に新しい指摘が出ても block しない" "none" "$(printf '%s' "$OUTC2" | jq -r '.decision // "none"')"
+assert_eq "上限後の警告は、その時点の指摘件数を伝える" "true" "$(printf '%s' "$OUTC2" | jq -r --arg n "$NEW_TOTAL" '.hookSpecificOutput.additionalContext // "" | contains("指摘が \($n) 件")')"
+NEW_SUMMARY=$(bash scripts/meiseki-lint-core.sh "$TESTDIR/sep-dn.md" | sed -n 's/^summary=//p')
+assert_eq "上限後の警告は、その時点の指摘の一覧を伝える" "true" "$(printf '%s' "$OUTC2" | jq -r --arg s "$NEW_SUMMARY" '.hookSpecificOutput.additionalContext // "" | contains($s)')"
+OUTC3=$(hook "$TESTDIR/sep-dn.md")
+assert_eq "上限後の同一内容は、同じ警告をリプレイする" "$(printf '%s' "$OUTC2" | jq -r '.hookSpecificOutput.additionalContext')" "$(printf '%s' "$OUTC3" | jq -r '.hookSpecificOutput.additionalContext')"
 
 echo ""
 echo "Part 3: カテゴリ I(文字化け) — 警告のみで block しない"

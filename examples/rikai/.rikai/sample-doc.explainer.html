@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sample-doc.md 絵解きノート</title>
+<style>
+/* 1 カラムの絵本。論点ごとに「大きな絵 → ひとこと → きちんと言うと → 迷いどころ → 教科書の言葉」を縦に並べる。
+   明るい面はノート、暗い面は黒板とチョークの色。色はすべて下のトークンから取る。 */
+:root {
+  color-scheme: light dark;
+  --bg: #EFF3F8; --paper: #FFFFFF; --ink: #1B2A47; --ink-soft: #56637C; --line: #C5D0E0; --tint: #DCE6F5;
+  --marker: #FFD84A; --marker-soft: #FFE98A; --on-marker: #1B2A47; --blue: #2B66D9;
+  --ok: #1F9D6B; --ok-bg: #D9F2E5; --ok-ink: #0E6541;
+  --ng: #DD4F38; --ng-bg: #FBE2DC; --ng-ink: #A22E1B; --on-ng: #FFFFFF;
+  --display: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --body: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13201B; --paper: #1B2C25; --ink: #EEF3EA; --ink-soft: #A8B8AD; --line: #3B5046; --tint: #2A4136;
+    --marker: #F2CF4B; --marker-soft: #665612; --on-marker: #1B2A47; --blue: #86B6FF;
+    --ok: #6FD3A3; --ok-bg: #1E3F31; --ok-ink: #9BE8C2;
+    --ng: #FF8E7A; --ng-bg: #4A261E; --ng-ink: #FFB0A1; --on-ng: #2A1410;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.85; }
+.wrap { max-width: 720px; margin-inline: auto; padding-inline: 20px; padding-block: 44px 72px; display: grid; gap: 48px; }
+.wrap > * { min-width: 0; }
+h1, h2, p, figure, ol, ul, blockquote { margin: 0; }
+a { color: var(--blue); }
+a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+.top { display: grid; gap: 14px; }
+.eyebrow { font-size: 13px; color: var(--ink-soft); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 8vw, 46px); line-height: 1.25; }
+.lead { font-size: 17px; max-width: 34em; }
+.score { display: grid; gap: 8px; padding-block: 8px; }
+.num { font-family: var(--display); font-weight: 700; font-size: 18px; display: flex; align-items: baseline; gap: 8px; }
+.num b { font-size: 60px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.legend { font-size: 14px; color: var(--ink-soft); }
+
+main { display: grid; gap: 56px; }
+.q { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.q > * { min-width: 0; }
+.q + .q { border-top: 2px dashed var(--line); padding-top: 52px; }
+.qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.qno { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--ink-soft); }
+.chip { font-family: var(--display); font-weight: 700; font-size: 13px; padding: 2px 12px; border-radius: 999px; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.chip.ng { background: var(--ng-bg); color: var(--ng-ink); }
+h2 { font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1.4; }
+.pic { background: var(--paper); border: 2px solid var(--ink); border-radius: 18px 22px 16px 24px; padding: 14px; }
+.pic svg { display: block; width: 100%; height: auto; }
+.cap { font-size: 13px; color: var(--ink-soft); font-family: var(--display); padding-top: 10px; }
+.hitokoto { font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1.6; }
+.hitokoto mark { background: linear-gradient(transparent 58%, var(--marker-soft) 58%); color: inherit; padding-inline: 2px; }
+.kichinto { max-width: 36em; }
+.label { display: block; font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--ink-soft); letter-spacing: 0.06em; }
+.mayoi { background: var(--tint); border-radius: 14px; padding: 14px 18px; }
+blockquote { font-size: 14px; color: var(--ink-soft); line-height: 1.75; }
+blockquote p + p { margin-top: 4px; }
+
+/* 絵（SVG）の部品。色は必ずこれらのクラスで付ける */
+svg text { font-family: var(--display); fill: var(--ink); }
+.t { font-size: 17px; font-weight: 700; }
+.s { font-size: 13px; font-weight: 500; fill: var(--ink-soft); }
+.big { font-size: 28px; font-weight: 900; }
+.on-marker { fill: var(--on-marker); }
+.st { stroke: var(--ink); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.sk { stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.f-paper { fill: var(--paper); }
+.f-tint { fill: var(--tint); }
+.f-marker { fill: var(--marker); }
+.f-ink { fill: var(--ink); }
+.f-ok { fill: var(--ok); }
+.f-ng { fill: var(--ng); }
+.f-blue { fill: var(--blue); }
+.ico { stroke: currentColor; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 絵の代わりに使える HTML の部品。rows は順序や階層、tiles は並列の比較 */
+.rows { list-style: none; padding: 0; display: grid; gap: 8px; }
+.rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 14px; border-radius: 12px; background: var(--tint); line-height: 1.55; }
+.rows b { font-family: var(--display); font-weight: 900; }
+.rows span { flex: 1 1 200px; min-width: 0; font-size: 14.5px; }
+.rows .tag { flex: none; font-family: var(--display); font-weight: 700; font-size: 13px; padding: 1px 10px; border-radius: 999px; background: var(--ink); color: var(--paper); }
+.rows .tag.free { background: transparent; color: inherit; border: 2px dashed currentColor; }
+.rows .hit { background: var(--marker); color: var(--on-marker); }
+.rows .hit .tag { background: var(--on-marker); color: var(--marker); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--tint); border-radius: 14px; padding: 14px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.tile svg { width: 52px; height: 52px; }
+.tile b { font-family: var(--display); font-weight: 900; font-size: 19px; }
+.tile span { font-size: 14px; line-height: 1.6; }
+.tile.hit { background: var(--marker); color: var(--on-marker); }
+
+footer { font-size: 13px; color: var(--ink-soft); line-height: 1.8; border-top: 2px dashed var(--line); padding-top: 28px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">sample-doc.md ／ 最終更新 2026年10月4日</p>
+  <h1>絵解きノート</h1>
+  <p class="lead">挑戦した論点を、大きな絵とひとことで振り返ります。細かい定義や数式は、同じフォルダのテキストブックにまとめています（PDF がなければ、原稿の <code>.tex</code>）。</p>
+  <!-- rikai:progress:start -->
+  <div class="score">
+    <p class="num"><b>7</b><span>/ 7 論点に挑戦済み</span></p>
+    <p class="legend">復習中：<a href="#topic-001">一意キーと重複の防止</a>、<a href="#topic-003">再送対象の判定（502/503/タイムアウト）</a>、<a href="#topic-006">完了判定と保存失敗</a></p>
+  </div>
+  <!-- rikai:progress:end -->
+</header>
+<main>
+<!-- rikai:topics:start -->
+<article class="q" id="topic-001">
+  <div class="qhead"><span class="qno">2.1 重複の防止</span><span class="chip ng">復習中</span></div>
+  <h2>同じキーで 2 度頼むと？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 205" role="img" aria-label="一意キー K1 の 1 回目の要求でジョブが 1 つできる。同じ K1 の再送要求は新しいジョブを作らず、既存ジョブの ID が返る">
+      <defs><marker id="ah-1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1 L9 5 L1 9" class="st"/></marker></defs>
+      <rect x="16" y="24" width="132" height="46" rx="12" class="f-paper sk"/>
+      <rect x="16" y="128" width="132" height="46" rx="12" class="f-paper sk"/>
+      <rect x="300" y="66" width="164" height="60" rx="14" class="f-marker sk"/>
+      <line x1="148" y1="47" x2="294" y2="86" class="st" marker-end="url(#ah-1)"/>
+      <line x1="148" y1="140" x2="294" y2="115" class="st" stroke-dasharray="7 7" marker-end="url(#ah-1)"/>
+      <path d="M382 126 V160 Q382 166 376 166 H156" class="st" marker-end="url(#ah-1)"/>
+      <text x="82" y="53" text-anchor="middle" class="t">1 回目・K1</text>
+      <text x="82" y="157" text-anchor="middle" class="t">再送・K1</text>
+      <text x="382" y="102" text-anchor="middle" class="t on-marker">ジョブは 1 つ</text>
+      <text x="206" y="42" text-anchor="middle" class="s">ジョブを作る</text>
+      <text x="268" y="192" text-anchor="middle" class="s">既存ジョブの ID を返す</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">同じ引換番号で何度たずねても、<mark>出てくる注文票は最初の 1 枚</mark>。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>送信要求には、呼び出し元が利用者 ID と通知種別から作った一意キーを付けます。同じキーの要求をもう一度受け付けると、ワーカーは新しいジョブを作らず、既存ジョブの ID を返します。呼び出し元が再送でキーを作り直すと、別のジョブとして扱われます。</p>
+  <div class="mayoi"><span class="label">迷いどころ</span>新しいジョブができるのは、キーを作り直した要求のときだけです。同じキーのままなら、何度届いてもジョブは増えず、返る ID も既存ジョブのものです。見分ける目印は、キーが同じかどうかです。</div>
+  <blockquote><span class="label">教科書の言葉</span><p>「同じキーを持つ要求を再度受け付けた場合、ワーカーは新しいジョブを作らず、既存ジョブの ID を返す。」</p></blockquote>
+</article>
+<article class="q" id="topic-002">
+  <div class="qhead"><span class="qno">2.2 配信順序</span><span class="chip ok">卒業</span></div>
+  <h2>保存の順は、完了の順？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 205" role="img" aria-label="上の列は保存の順で A、B。下の列は完了の順で B、A。A は再送待ちになったので、後から受け付けた B が先に完了している">
+      <defs><marker id="ah-2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1 L9 5 L1 9" class="st"/></marker></defs>
+      <line x1="100" y1="60" x2="462" y2="60" class="st" marker-end="url(#ah-2)"/>
+      <line x1="100" y1="150" x2="462" y2="150" class="st" marker-end="url(#ah-2)"/>
+      <line x1="226" y1="77" x2="263" y2="131" class="st" marker-end="url(#ah-2)"/>
+      <line x1="156" y1="77" x2="412" y2="132" class="st" stroke-dasharray="7 7" marker-end="url(#ah-2)"/>
+      <circle cx="150" cy="60" r="18" class="f-paper sk"/>
+      <circle cx="220" cy="60" r="18" class="f-paper sk"/>
+      <circle cx="270" cy="150" r="18" class="f-paper sk"/>
+      <circle cx="420" cy="150" r="18" class="f-marker sk"/>
+      <text x="16" y="66" class="t">保存の順</text>
+      <text x="16" y="156" class="t">完了の順</text>
+      <text x="150" y="66" text-anchor="middle" class="t">A</text>
+      <text x="220" y="66" text-anchor="middle" class="t">B</text>
+      <text x="270" y="156" text-anchor="middle" class="t">B</text>
+      <text x="420" y="156" text-anchor="middle" class="t on-marker">A</text>
+      <text x="340" y="102" text-anchor="middle" class="s">再送待ち</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">列には並んだ順に入れる。でも<mark>前の人が忘れ物で戻れば</mark>、後ろの人が先に店を出る。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>ワーカーは同じ利用者へのジョブを受付順に保存しますが、配信の完了順は保証しません。先に受け付けたジョブが再送待ちになると、後のジョブが先に完了することがあります。</p>
+  <div class="mayoi"><span class="label">迷いどころ</span>受付順が守られるのは「保存」までです。「完了」の順は、再送待ちが入ると入れ替わります。後のジョブが先に完了しうるのは、先のジョブが再送待ちになったときです。</div>
+  <blockquote><span class="label">教科書の言葉</span><p>「ワーカーは同じ利用者へのジョブを受付順に保存するが、配信の完了順は保証しない。」</p></blockquote>
+</article>
+<article class="q" id="topic-003">
+  <div class="qhead"><span class="qno">3.1 再送の対象</span><span class="chip ng">復習中</span></div>
+  <h2>どの失敗なら再送する？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 220" role="img" aria-label="左の箱は一時的な失敗で再送するもの。502、503、タイムアウトが入る。右の箱は失敗として確定し再送しないもの。429 を除く 4xx が入り、同じ要求のままでは成功が見込めない">
+      <rect x="16" y="16" width="224" height="188" rx="18" class="f-paper sk"/>
+      <rect x="256" y="16" width="208" height="188" rx="18" class="f-paper sk"/>
+      <rect x="40" y="64" width="176" height="36" rx="18" class="f-marker sk"/>
+      <rect x="40" y="110" width="176" height="36" rx="18" class="f-marker sk"/>
+      <rect x="40" y="156" width="176" height="36" rx="18" class="f-marker sk"/>
+      <rect x="272" y="64" width="176" height="36" rx="18" class="f-tint sk"/>
+      <text x="128" y="46" text-anchor="middle" class="t">一時的な失敗 → 再送</text>
+      <text x="360" y="46" text-anchor="middle" class="t">確定 → 再送しない</text>
+      <text x="128" y="88" text-anchor="middle" class="t on-marker">502</text>
+      <text x="128" y="134" text-anchor="middle" class="t on-marker">503</text>
+      <text x="128" y="180" text-anchor="middle" class="t on-marker">タイムアウト</text>
+      <text x="360" y="88" text-anchor="middle" class="t">4xx（429 を除く）</text>
+      <text x="360" y="132" text-anchor="middle" class="s">同じ要求では成功が見込めない</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">話し中や圏外なら、<mark>かけ直せばつながるかもしれない</mark>。番号違いなら、何度かけても同じ。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>外部 API が 502 または 503 を返した場合と、接続がタイムアウトした場合は再送します。これらは一時的な失敗として扱います。429 を除く 4xx 応答は再送せず、失敗として確定します。</p>
+  <div class="mayoi"><span class="label">迷いどころ</span>応答が返ったかどうかでは分かれません。503 は応答が返っていても、一時的な失敗として再送します。エラー応答がすべて再送の対象になるわけでもなく、429 を除く 4xx は再送しません。見分ける目印は応答コードです。</div>
+  <blockquote><span class="label">教科書の言葉</span><p>「外部 API が 502 または 503 を返した場合と、接続がタイムアウトした場合は再送する。これらは一時的な失敗として扱う。」</p></blockquote>
+</article>
+<article class="q" id="topic-004">
+  <div class="qhead"><span class="qno">3.1 再送の対象</span><span class="chip ok">卒業</span></div>
+  <h2>4xx の中の 429 は？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 180" role="img" aria-label="4xx の範囲を表す帯に「再送しない」と書かれている。帯には 429 の位置に穴があき、429 だけが帯の上に飛び出して、この規則から外れている">
+      <rect x="40" y="96" width="400" height="44" rx="10" class="f-tint sk"/>
+      <rect x="146" y="96" width="22" height="44" class="f-paper sk"/>
+      <line x1="157" y1="62" x2="157" y2="92" class="st" stroke-dasharray="5 6"/>
+      <rect x="112" y="18" width="90" height="44" rx="22" class="f-marker sk"/>
+      <text x="157" y="47" text-anchor="middle" class="t on-marker">429</text>
+      <text x="216" y="45" class="s">この規則から外れる</text>
+      <text x="304" y="124" text-anchor="middle" class="t">4xx は再送しない</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">「全員、上履きに履き替える。<mark>ただし 1 人だけ例外</mark>」の 1 人が 429。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>429 を除く 4xx 応答は、要求内容を変えないまま再送しても成功が見込めないため、再送せずに失敗として確定します。429 は、この「再送しない」の規則から外れます。429 を再送するかどうかは、原文には書かれていません。</p>
+  <blockquote><span class="label">教科書の言葉</span><p>「429 を除く 4xx 応答は再送しない。」</p></blockquote>
+</article>
+<article class="q" id="topic-005">
+  <div class="qhead"><span class="qno">3.2 待機時間と上限</span><span class="chip ok">卒業</span></div>
+  <h2>何回まで、どれだけ待つ？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 215" role="img" aria-label="初回から 5 回目まで 5 つの試行が並ぶ。間の待機時間は 1 秒、2 秒、4 秒、上限 8 秒と延びる。5 回目が失敗すると失敗キューへ移る">
+      <defs><marker id="ah-5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1 L9 5 L1 9" class="st"/></marker></defs>
+      <line x1="36" y1="80" x2="396" y2="80" class="st"/>
+      <line x1="396" y1="96" x2="396" y2="146" class="st" marker-end="url(#ah-5)"/>
+      <circle cx="36" cy="80" r="12" class="f-tint sk"/>
+      <circle cx="96" cy="80" r="12" class="f-tint sk"/>
+      <circle cx="168" cy="80" r="12" class="f-tint sk"/>
+      <circle cx="262" cy="80" r="12" class="f-tint sk"/>
+      <circle cx="396" cy="80" r="14" class="f-ng sk"/>
+      <rect x="323" y="150" width="146" height="50" rx="14" class="f-marker sk"/>
+      <text x="66" y="60" text-anchor="middle" class="s">1 秒</text>
+      <text x="132" y="60" text-anchor="middle" class="s">2 秒</text>
+      <text x="215" y="60" text-anchor="middle" class="s">4 秒</text>
+      <text x="329" y="60" text-anchor="middle" class="s">上限 8 秒</text>
+      <text x="36" y="118" text-anchor="middle" class="s">初回</text>
+      <text x="418" y="85" class="s">5 回目</text>
+      <text x="396" y="181" text-anchor="middle" class="t on-marker">失敗キュー</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">返事のない家は、間をあけながら<mark>初回も数えて 5 回まで</mark>ノックする。それでもだめなら伝言箱へ。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>再送前の待機時間は 1 秒、2 秒、4 秒の順に延ばし、その後は 8 秒を上限とします。試行回数は初回送信を含めて最大 5 回です。5 回目が失敗したジョブは自動では再送せず、失敗キューへ移します。</p>
+  <blockquote><span class="label">教科書の言葉</span><p>「再送前の待機時間は 1 秒、2 秒、4 秒の順に延ばし、その後は 8 秒を上限とする。」</p><p>「初回送信を含む試行回数は最大 5 回とする。」</p></blockquote>
+</article>
+<article class="q" id="topic-006">
+  <div class="qhead"><span class="qno">4.1 完了の判定</span><span class="chip ng">復習中</span></div>
+  <h2>いつ「完了」になる？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 200" role="img" aria-label="上の段は、成功応答と ID の保存がそろって完了。下の段は、成功応答があっても保存に失敗したので完了にしない">
+      <defs><marker id="ah-6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1 L9 5 L1 9" class="st"/></marker></defs>
+      <rect x="16" y="33" width="120" height="44" rx="22" class="f-paper sk"/>
+      <path d="M146 55 H162 M154 47 V63" class="st"/>
+      <rect x="172" y="33" width="128" height="44" rx="22" class="f-paper sk"/>
+      <line x1="306" y1="55" x2="336" y2="55" class="st" marker-end="url(#ah-6)"/>
+      <rect x="344" y="31" width="128" height="48" rx="14" class="f-tint sk"/>
+      <rect x="16" y="123" width="120" height="44" rx="22" class="f-paper sk"/>
+      <path d="M146 145 H162 M154 137 V153" class="st"/>
+      <rect x="172" y="123" width="128" height="44" rx="22" class="f-paper sk" stroke-dasharray="7 6"/>
+      <line x1="306" y1="145" x2="336" y2="145" class="st" marker-end="url(#ah-6)"/>
+      <rect x="344" y="121" width="128" height="48" rx="14" class="f-marker sk"/>
+      <text x="76" y="61" text-anchor="middle" class="t">成功応答</text>
+      <text x="236" y="61" text-anchor="middle" class="t">ID を保存</text>
+      <text x="408" y="61" text-anchor="middle" class="t">完了</text>
+      <text x="76" y="151" text-anchor="middle" class="t">成功応答</text>
+      <text x="236" y="151" text-anchor="middle" class="t">保存に失敗</text>
+      <text x="408" y="151" text-anchor="middle" class="t on-marker">完了にしない</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">荷物を手渡しても、<mark>控えを台帳にしまうまで</mark>は配達完了にしない。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>外部 API が成功応答を返し、その応答 ID を配信記録へ保存できた時点で、ジョブを完了とします。成功応答を受け取っても保存に失敗した場合は完了にしません。保存に失敗したジョブを再実行するときも、受付時の一意キーを引き継ぎます。</p>
+  <div class="mayoi"><span class="label">迷いどころ</span>外部 API の成功応答は、完了の条件の片方にすぎません。もう片方は、応答 ID を配信記録へ保存できたことです。成功応答を受け取っていても、保存に失敗すれば完了ではありません。</div>
+  <blockquote><span class="label">教科書の言葉</span><p>「成功応答を受け取っても保存に失敗した場合は完了にしない。」</p></blockquote>
+</article>
+<article class="q" id="topic-007">
+  <div class="qhead"><span class="qno">4.2 運用停止</span><span class="chip ok">卒業</span></div>
+  <h2>止めるとき、送信中の要求は？</h2>
+  <figure class="pic">
+    <svg viewBox="0 0 480 205" role="img" aria-label="停止の指示の線をはさんで 2 つの段がある。通常停止では、送信中の要求は線を越えて続き、応答を記録してから停止する。情報漏えいのおそれがある緊急停止では、送信中の要求も線のところで直ちに中断する">
+      <line x1="180" y1="32" x2="180" y2="196" class="st" stroke-dasharray="6 7"/>
+      <rect x="120" y="58" width="220" height="24" rx="12" class="f-tint sk"/>
+      <circle cx="340" cy="70" r="9" class="f-ok sk"/>
+      <rect x="120" y="144" width="60" height="24" rx="12" class="f-tint sk"/>
+      <path d="M172 148 L188 164 M188 148 L172 164" class="st"/>
+      <rect x="200" y="138" width="176" height="36" rx="18" class="f-marker"/>
+      <text x="180" y="22" text-anchor="middle" class="s">停止の指示</text>
+      <text x="16" y="76" class="t">通常停止</text>
+      <text x="300" y="110" text-anchor="middle" class="s">応答を記録してから停止</text>
+      <text x="16" y="162" class="t">緊急停止</text>
+      <text x="16" y="186" class="s">漏えいのおそれ</text>
+      <text x="288" y="162" text-anchor="middle" class="t on-marker">送信中も直ちに中断</text>
+    </svg>
+  </figure>
+  <p class="hitokoto">閉店時間でも、<mark>レジの途中の会計は済ませてから</mark>閉める。火事なら会計の途中でも外へ出る。</p>
+  <p class="kichinto"><span class="label">きちんと言うと</span>運用者が配信を停止すると、新しいジョブの取得を止めます。すでに外部 API へ送信中の要求は取り消さず、その応答を記録してからワーカーを停止します。ただし、情報漏えいのおそれがある緊急停止では、送信中の要求も直ちに中断します。</p>
+  <blockquote><span class="label">教科書の言葉</span><p>「すでに外部 API へ送信中の要求は取り消さず、その応答を記録してからワーカーを停止する。」</p><p>「ただし、情報漏えいのおそれがある緊急停止では、送信中の要求も直ちに中断する。」</p></blockquote>
+</article>
+<!-- rikai:topics:end -->
+</main>
+<footer>
+  <p>正答と「教科書の言葉」の根拠は、すべて sample-doc.md です。たとえ話のうち資料にないものは、このノートのために足した絵解きです。</p>
+</footer>
+</div>
+</body>
+</html>

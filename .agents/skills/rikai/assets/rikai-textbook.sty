@@ -1,0 +1,101 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{rikai-textbook}[2026/10/04 rikai explainer textbook style]
+\RequirePackage{iftex}
+\RequireXeTeX
+\RequirePackage[a4paper,margin=22mm]{geometry}
+\RequirePackage{fontspec}
+\RequirePackage{xeCJK}
+\xeCJKDeclareCharClass{CJK}{"0370 -> "03FF, "2015, "2190 -> "21FF, "2200 -> "22FF, "2460 -> "24FF, "2500 -> "257F, "25A0 -> "25FF, "2600 -> "27BF}
+% 欧文フォントにない記号（ギリシャ文字、矢印、数学記号、丸数字、罫線、図形、絵記号）を日本語フォントで出す。
+% 数式の中の \alpha などは数式フォントで出るので、この指定の影響を受けない。
+% 本文フォント。IPAexGothic を第一候補とし、なければ TeX Live 同梱の IPAex、
+% OS に入っている日本語フォントの順に切り替える。
+% 読み込む前に \newcommand{\rikaifont}{フォント名} と書けば、その指定を優先する。
+\ifdefined\rikaifont\else
+  \IfFontExistsTF{IPAexGothic}{\newcommand{\rikaifont}{IPAexGothic}}{%
+  \IfFontExistsTF{ipaexg.ttf}{\newcommand{\rikaifont}{ipaexg.ttf}}{%
+  \IfFontExistsTF{Hiragino Sans}{\newcommand{\rikaifont}{Hiragino Sans}}{%
+  \IfFontExistsTF{Yu Gothic}{\newcommand{\rikaifont}{Yu Gothic}}{%
+  \IfFontExistsTF{Noto Sans CJK JP}{\newcommand{\rikaifont}{Noto Sans CJK JP}}{%
+  \newcommand{\rikaifont}{IPAexGothic}}}}}}%
+\fi
+\setCJKmainfont[AutoFakeBold=2.5]{\rikaifont}
+\setCJKsansfont[AutoFakeBold=2.5]{\rikaifont}
+\setCJKmonofont{\rikaifont}
+\RequirePackage{amsmath,amssymb}
+\RequirePackage{xcolor}
+\RequirePackage{booktabs,array}
+% 文が入る表の列。L{0.6} は行幅の 6 割の幅で、左寄せで折り返す
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1\linewidth}}
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\RequirePackage[most]{tcolorbox}
+% 見出しだけがページの下端に取り残されないようにする
+\RequirePackage[nobottomtitles*]{titlesec}
+\RequirePackage{fancyhdr}
+\RequirePackage{enumitem}
+\RequirePackage[hidelinks]{hyperref}
+
+\definecolor{rikaiInk}{HTML}{1B2A47}
+\definecolor{rikaiAccent}{HTML}{0F6E6E}
+\definecolor{rikaiPointBg}{HTML}{E6F2F2}
+\definecolor{rikaiExampleBg}{HTML}{F3F5F9}
+\definecolor{rikaiPitfall}{HTML}{B4590E}
+\definecolor{rikaiPitfallBg}{HTML}{FDF1E3}
+\definecolor{rikaiQuoteBg}{HTML}{F4F4F1}
+
+% 固定の文言。原稿の \usepackage{rikai-textbook} と \begin{document} の間で \renewcommand すれば、
+% その言語の文言になる（使う側はすべてこのマクロを通すので、目次・題・論点・囲みに反映される）
+\newcommand{\rikaiLabelPoint}{要点}
+\newcommand{\rikaiLabelExample}{例題}
+\newcommand{\rikaiLabelPitfall}{迷いどころ}
+\newcommand{\rikaiLabelSource}{原文}
+\newcommand{\rikaiLabelToc}{目次}
+\newcommand{\rikaiLabelBook}{テキストブック}
+\newcommand{\rikaiLabelUpdated}{最終更新}
+\newcommand{\rikaiLabelStatus}{状態}
+\newcommand{\rikaiLabelStatusSep}{：}
+\newcommand{\rikaiLabelDisclaimer}{事実の根拠は資料の原文です。例題の数値・名前・場面には、説明のために足したものがあります。}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\linespread{1.25}
+\setlist{itemsep=2pt,topsep=4pt}
+\renewcommand{\contentsname}{\rikaiLabelToc}
+% 節と論点には LaTeX の番号を付けない（目次には載る）。節の題には資料の見出しを番号ごと書く
+\setcounter{secnumdepth}{0}
+
+\titleformat{\section}{\Large\bfseries\color{rikaiAccent}}{\thesection}{0.8em}{}[{\color{rikaiAccent}\titlerule[0.8pt]}]
+\titleformat{\subsection}{\large\bfseries\color{rikaiInk}}{\thesubsection}{0.8em}{}
+
+\newcommand{\rikaiheader}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\rikaiheader}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% \rikaititle{資料名}{最終更新日}
+\newcommand{\rikaititle}[2]{%
+  \renewcommand{\rikaiheader}{#1}%
+  \begin{center}
+    {\LARGE\bfseries\textcolor{rikaiAccent}{#1}}\\[6pt]
+    {\small \rikaiLabelBook\quad \rikaiLabelUpdated\space #2}\\[2pt]
+    {\footnotesize\color{black!60}\rikaiLabelDisclaimer}
+  \end{center}
+  \vspace{2pt}{\color{rikaiAccent}\hrule height 0.8pt}\vspace{10pt}}
+
+% \topic{論点の題名}{状態}
+\newcommand{\topic}[2]{\subsection{#1}{\small\textcolor{rikaiAccent}{\rikaiLabelStatus\rikaiLabelStatusSep#2}}\par}
+
+\tcbset{rikaibox/.style={enhanced,breakable,boxrule=0.6pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,fonttitle=\bfseries\small,coltitle=white}}
+\newtcolorbox{youten}{rikaibox,colback=rikaiPointBg,colframe=rikaiAccent,title=\rikaiLabelPoint}
+\newtcolorbox[auto counter]{reidai}[1][]{rikaibox,
+  colback=rikaiExampleBg,colframe=rikaiInk,title={\rikaiLabelExample\space\thetcbcounter\quad #1}}
+\newtcolorbox{mayoi}{rikaibox,colback=rikaiPitfallBg,colframe=rikaiPitfall,title=\rikaiLabelPitfall}
+\newtcolorbox{genbun}{enhanced,breakable,boxrule=0pt,arc=0pt,colback=rikaiQuoteBg,
+  colframe=rikaiQuoteBg,borderline west={2.5pt}{0pt}{black!45},
+  left=10pt,right=8pt,top=5pt,bottom=5pt,fontupper=\small,
+  before upper={\textbf{\rikaiLabelSource}\par\smallskip}}
+\endinput

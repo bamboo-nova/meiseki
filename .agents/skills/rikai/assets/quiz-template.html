@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>理解度チェック</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #EFF3F8; --paper: #FFFFFF; --ink: #1B2A47; --ink-soft: #56637C; --line: #C5D0E0;
+  --accent: #2B66D9; --on-accent: #FFFFFF; --pick: #DCE6F5; --ok-bg: #D9F2E5; --ok-ink: #0E6541;
+  --font: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13201B; --paper: #1B2C25; --ink: #EEF3EA; --ink-soft: #A8B8AD; --line: #3B5046;
+    --accent: #86B6FF; --on-accent: #13201B; --pick: #2A4136; --ok-bg: #1E3F31; --ok-ink: #9BE8C2;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.8; }
+.wrap { max-width: 720px; margin-inline: auto; padding-inline: 20px; padding-block: 40px 140px; display: grid; gap: 28px; }
+.eyebrow { margin: 0; font-size: 13px; color: var(--ink-soft); letter-spacing: 0.04em; }
+h1 { margin: 0; font-size: clamp(24px, 6vw, 34px); line-height: 1.35; }
+.meta { margin: 0; color: var(--ink-soft); font-size: 14px; }
+form { display: grid; gap: 20px; }
+fieldset.q { margin: 0; min-width: 0; border: 2px solid var(--line); border-radius: 16px; background: var(--paper); padding: 18px 20px 20px; display: grid; gap: 10px; }
+fieldset.q.answered { border-color: var(--accent); }
+legend { padding: 0 8px; font-weight: 700; font-size: 14px; color: var(--ink-soft); }
+.qtext { margin: 0 0 4px; font-weight: 700; font-size: 17px; line-height: 1.6; }
+label.choice { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
+label.choice:hover { background: var(--pick); }
+label.choice input { margin-top: 6px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+label.choice:has(input:checked) { background: var(--pick); }
+label.choice:focus-within { outline: 3px solid var(--accent); outline-offset: 1px; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 2px solid var(--line); padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); }
+.bar-in { max-width: 720px; margin-inline: auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.bar p { margin: 0; font-weight: 700; }
+button { font: inherit; font-weight: 700; border: 0; border-radius: 999px; padding: 10px 28px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.panel { border-radius: 16px; background: var(--ok-bg); color: var(--ok-ink); padding: 22px; display: grid; gap: 12px; }
+.panel h2 { margin: 0; font-size: 20px; }
+.panel p { margin: 0; }
+textarea { width: 100%; min-height: 76px; font: inherit; font-family: ui-monospace, Menlo, monospace; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--paper); color: var(--ink); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow" id="eyebrow"></p>
+    <h1 id="title"></h1>
+    <p class="meta" id="meta"></p>
+  </header>
+  <form id="quiz" novalidate></form>
+  <section class="panel" id="done" hidden>
+    <h2 id="done-title"></h2>
+    <p id="done-body"></p>
+  </section>
+  <section class="panel" id="paste" hidden>
+    <h2 id="paste-title"></h2>
+    <p id="paste-note"></p>
+    <textarea id="code" readonly></textarea>
+    <div><button type="button" id="copy"></button></div>
+  </section>
+</main>
+<div class="bar" id="bar">
+  <div class="bar-in">
+    <p id="progress"></p>
+    <button type="submit" form="quiz" id="submit" disabled></button>
+  </div>
+</div>
+<script type="application/json" id="quiz-data">/*__QUIZ_DATA__*/</script>
+<script>
+(function () {
+  // 固定の文言。ja と en は同じキーを持つ(キーは build_quiz.py の UI_KEYS と同じ)。{…} は差し込む値
+  var LABELS = {
+    ja: {
+      eyebrow: 'rikai 理解度チェック',
+      meta: '全 {total} 問。すべてに答えると提出できます。',
+      question: '問{no}',
+      progress: '{answered} / {total} 問に回答',
+      submit: '提出する',
+      done_title: '提出しました',
+      done_body: 'ターミナルに戻ると採点結果が出ます。このタブは閉じてかまいません。',
+      paste_title: '回答コードをターミナルに貼ってください',
+      paste_note: '下のコードをコピーして、ターミナルに貼り付けてください。',
+      copy: 'コピーする',
+      copied: '回答コードをコピーしました。ターミナルに貼り付けてください。',
+      selected: 'コードを選択しました。コピーしてターミナルに貼り付けてください。',
+      code_label: '回答コード'
+    },
+    en: {
+      eyebrow: 'rikai comprehension check',
+      meta: 'Questions: {total}. Answer all of them to submit.',
+      question: 'Q{no}',
+      progress: '{answered} / {total} answered',
+      submit: 'Submit',
+      done_title: 'Submitted',
+      done_body: 'Go back to the terminal to see your results. You can close this tab.',
+      paste_title: 'Paste the answer code into the terminal',
+      paste_note: 'Copy the code below and paste it into the terminal.',
+      copy: 'Copy',
+      copied: 'Answer code copied. Paste it into the terminal.',
+      selected: 'Code selected. Copy it and paste it into the terminal.',
+      code_label: 'Answer code'
+    }
+  };
+
+  var data = JSON.parse(document.getElementById('quiz-data').textContent);
+  var lang = typeof data.lang === 'string' && data.lang ? data.lang : 'ja';
+  var base = lang.split('-')[0].toLowerCase() === 'ja' ? LABELS.ja : LABELS.en;
+  var ui = data.ui && typeof data.ui === 'object' ? data.ui : {};
+  var L = {};
+  Object.keys(base).forEach(function (key) {
+    L[key] = typeof ui[key] === 'string' && ui[key] ? ui[key] : base[key];
+  });
+  function t(key, values) {
+    return L[key].replace(/\{(\w+)\}/g, function (all, name) {
+      return values && Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : all;
+    });
+  }
+  function setText(id, key) { document.getElementById(id).textContent = t(key); }
+
+  document.documentElement.lang = lang;
+  var form = document.getElementById('quiz');
+  var submit = document.getElementById('submit');
+  var progress = document.getElementById('progress');
+  var storeKey = 'rikai:' + data.session_id + ':' + data.title;
+  var total = data.questions.length;
+
+  document.title = data.title;
+  document.getElementById('title').textContent = data.title;
+  document.getElementById('meta').textContent = t('meta', { total: total });
+  setText('eyebrow', 'eyebrow');
+  setText('submit', 'submit');
+  setText('done-title', 'done_title');
+  setText('done-body', 'done_body');
+  setText('paste-title', 'paste_title');
+  setText('paste-note', 'paste_note');
+  setText('copy', 'copy');
+  document.getElementById('code').setAttribute('aria-label', t('code_label'));
+
+  data.questions.forEach(function (q) {
+    var fs = document.createElement('fieldset');
+    fs.className = 'q';
+    fs.dataset.no = q.no;
+    var legend = document.createElement('legend');
+    legend.textContent = t('question', { no: q.no });
+    fs.appendChild(legend);
+    var text = document.createElement('p');
+    text.className = 'qtext';
+    text.textContent = q.question;
+    fs.appendChild(text);
+    q.choices.forEach(function (c) {
+      var label = document.createElement('label');
+      label.className = 'choice';
+      var input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'q' + q.no;
+      input.value = c.id;
+      input.id = 'q' + q.no + '-' + c.id;
+      var span = document.createElement('span');
+      span.textContent = c.text;
+      label.appendChild(input);
+      label.appendChild(span);
+      fs.appendChild(label);
+    });
+    form.appendChild(fs);
+  });
+
+  function answers() {
+    var result = {};
+    data.questions.forEach(function (q) {
+      var picked = form.querySelector('input[name="q' + q.no + '"]:checked');
+      if (picked) { result[q.no] = picked.value; }
+    });
+    return result;
+  }
+
+  function restore() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(storeKey) || '{}');
+      Object.keys(saved).forEach(function (no) {
+        var input = document.getElementById('q' + no + '-' + saved[no]);
+        if (input) { input.checked = true; }
+      });
+    } catch (e) { /* 保存領域が使えなくても、そのまま続ける */ }
+  }
+
+  function update() {
+    var a = answers();
+    var count = Object.keys(a).length;
+    Array.prototype.forEach.call(form.querySelectorAll('fieldset.q'), function (fs) {
+      fs.classList.toggle('answered', Object.prototype.hasOwnProperty.call(a, fs.dataset.no));
+    });
+    progress.textContent = t('progress', { answered: count, total: total });
+    submit.disabled = count < total;
+    try { localStorage.setItem(storeKey, JSON.stringify(a)); } catch (e) { /* 同上 */ }
+  }
+
+  function toCode(a) {
+    return data.questions.map(function (q) { return q.no + ':' + a[q.no]; }).join(' ');
+  }
+
+  function finish(panelId) {
+    form.hidden = true;
+    document.getElementById('bar').hidden = true;
+    document.getElementById(panelId).hidden = false;
+    window.scrollTo(0, 0);
+  }
+
+  function forget() {
+    try { localStorage.removeItem(storeKey); } catch (e) { /* 保存領域が使えなくても、そのまま続ける */ }
+  }
+
+  function showCode(a) {
+    var area = document.getElementById('code');
+    var note = document.getElementById('paste-note');
+    var code = toCode(a);
+    area.value = code;
+    finish('paste');
+    area.focus();
+    area.select();
+    // 提出操作の直後のうちにコピーを試みる。できなければ「コピーする」ボタンを使ってもらう
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        navigator.clipboard.writeText(code).then(function () {
+          note.textContent = t('copied');
+        }, function () { /* ボタンでのコピーに任せる */ });
+      } catch (e) { /* 同上 */ }
+    }
+  }
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var area = document.getElementById('code');
+    var note = document.getElementById('paste-note');
+    function selected() { area.focus(); area.select(); note.textContent = t('selected'); }
+    if (!navigator.clipboard) { selected(); return; }
+    navigator.clipboard.writeText(area.value).then(function () {
+      note.textContent = t('copied');
+    }, selected);
+  });
+
+  form.addEventListener('change', update);
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var a = answers();
+    if (Object.keys(a).length < total) { return; }
+    submit.disabled = true;
+    var token = new URLSearchParams(location.search).get('t');
+    if (location.protocol === 'file:' || !token) { showCode(a); return; }
+    fetch('/submit?t=' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: data.session_id, answers: a })
+    }).then(function (response) {
+      if (response.ok || response.status === 409) { forget(); finish('done'); return; }
+      showCode(a);
+    }, function () { showCode(a); });
+  });
+
+  restore();
+  update();
+})();
+</script>
+</body>
+</html>

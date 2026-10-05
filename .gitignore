@@ -146,3 +146,10 @@ vite.config.ts.timestamp-*
 
 # JEV(日本語教育語彙表)はユーザー任意入手・二次配布禁止のためコミットしない
 .agents/skills/yorisoi/references/vocab/jev.csv
+
+# duet パイプラインの作業状態(セッションローカル)
+.duet/
+
+# Python のキャッシュ
+__pycache__/
+*.pyc

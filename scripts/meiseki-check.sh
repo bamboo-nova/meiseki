@@ -8,7 +8,9 @@
 #   - PostToolUse の JSON 入出力
 #   - 文書系 md 以外の除外(設定・メモリ・計画・一時ファイル・フィクスチャ類)
 #   - 再実行ガード: 内容ハッシュ入りのステート TSV で同一内容の再 lint と
-#     block ループ(上限 2 回 → advisory 降格)を抑止する
+#     block ループ(上限 2 回 → advisory 降格)を抑止する。
+#     上限に達した後も、内容が変わっていれば検査はやり直す。警告に出すのは
+#     その時点の検査結果であり、過去の block の指摘を使い回さない
 #
 # 無効化:
 #   - 全体      : 環境変数 MEISEKI_HOOK_DISABLE=1
@@ -33,6 +35,7 @@ esac
 
 # 文書系 md 以外は対象外(設定・メモリ・計画・一時ファイル・フィクスチャ類)
 case "$FILE" in
+  *.study.md | \
   */CLAUDE.md | */AGENTS.md | */MEMORY.md | */SKILL.md | \
   */.claude/* | */plans/* | */memory/* | */node_modules/* | */.git/* | \
   */scratchpad/* | /tmp/* | /private/tmp/* | /var/folders/* | \
@@ -50,8 +53,8 @@ STATE="${MEISEKI_HOOK_STATE:-${TMPDIR:-/tmp}/meiseki-hook-state.tsv}"
 HASH=$(shasum -a 256 "$FILE" 2>/dev/null | cut -d' ' -f1)
 [ -n "$HASH" ] || HASH=nohash
 
-emit_advisory() { # total summary
-  jq -n --arg ctx "meiseki hook: ${FILE} に textlint の指摘が $1 件残っています($2)。meiseki のガードレールに基づく文脈判断で意図的に残した指摘であれば、対応は不要です。" \
+emit_advisory() { # total summary [extra]
+  jq -n --arg ctx "meiseki hook: ${FILE} に textlint の指摘が $1 件残っています($2)。meiseki のガードレールに基づく文脈判断で意図的に残した指摘であれば、対応は不要です。${3:-}" \
     '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
 }
 
@@ -83,6 +86,7 @@ append_state() { # decision total dn summary
 }
 
 BLOCKS=0
+CAPPED=0
 if [ -f "$STATE" ]; then
   BLOCKS=$(awk -F'\t' -v s="$SESSION" -v f="$FILE" \
     'BEGIN{c=0} $1==s && $2==f && $4=="block"{c++} END{print c}' "$STATE")
@@ -115,12 +119,11 @@ if [ -f "$STATE" ]; then
     exit 0
   fi
 
-  # (3) 同一セッション・同一ファイルの block が上限(2 回)到達 → lint せず advisory
+  # (3) 同一セッション・同一ファイルの block が上限(2 回)到達 → 以後は block せず advisory に降格する。
+  #     ここに来るのは内容が変わったとき(同一内容は (1) でリプレイ済み)なので、検査はやり直す。
+  #     検査を飛ばして最後の block の指摘を出すと、直したファイルにも古い指摘が出続ける。
   if [ "$BLOCKS" -ge 2 ]; then
-    LASTB=$(awk -F'\t' -v s="$SESSION" -v f="$FILE" \
-      '$1==s && $2==f && $4=="block"{l=$0} END{print l}' "$STATE")
-    emit_advisory "$(printf '%s' "$LASTB" | cut -f5)" "$(printf '%s' "$LASTB" | cut -f7)"
-    exit 0
+    CAPPED=1
   fi
 fi
 
@@ -151,10 +154,17 @@ if [ "$RC" = "0" ]; then
   exit 0
 fi
 
-append_state block "$TOTAL" "$DOUBLE_NEG" "$SUMMARY"
 EXTRA=""
 if [ "$INTEGRITY" -gt 0 ] 2>/dev/null; then
   EXTRA="。また、文字化けの疑いが ${INTEGRITY} 件あります(${INTEGRITY_SUMMARY})。こちらはリライトで直さず、対応の要否をユーザーに確認してください"
 fi
+if [ "$CAPPED" = "1" ]; then
+  # block 上限に達した後: 今回の検査結果を警告として伝える(block はしない)。
+  # decision を advisory として記録し、同一内容の再実行は (1) でこの行をリプレイする。
+  append_state advisory "$TOTAL" "$DOUBLE_NEG" "$SUMMARY"
+  emit_advisory "$TOTAL" "$SUMMARY" "$EXTRA"
+  exit 0
+fi
+append_state block "$TOTAL" "$DOUBLE_NEG" "$SUMMARY"
 emit_block "$DOUBLE_NEG" "$TOTAL" "$SUMMARY" "$EXTRA"
 exit 0

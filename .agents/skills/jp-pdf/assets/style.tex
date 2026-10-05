@@ -1,0 +1,59 @@
+% jp-pdf 配色ヘッダ（pandoc -H で読み込む）。build_pdf.py が別途 \RunningTitle / \DocTag を定義する。
+\providecommand{\RunningTitle}{}
+\providecommand{\DocTag}{}
+
+% ===== palette =====
+\definecolor{brand}{HTML}{0F766E}
+\definecolor{brandDark}{HTML}{115E56}
+\definecolor{brandMid}{HTML}{14B8A6}
+\definecolor{brandLite}{HTML}{E6FBF6}
+\definecolor{accent}{HTML}{B45309}
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{quoteBg}{HTML}{EFFCF8}
+\definecolor{rulec}{HTML}{5EEAD4}
+
+% ===== headings (colored + ruled) =====
+\usepackage{titlesec}
+\titleformat{\section}
+  {\Large\bfseries\color{brandDark}}{\thesection}{0.6em}{}
+  [{\vspace{1pt}{\color{rulec}\titlerule[2.2pt]}}]
+\titleformat{\subsection}
+  {\large\bfseries\color{brand}}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{accent}}{\thesubsubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{16pt}{7pt}
+\titlespacing*{\subsection}{0pt}{11pt}{4pt}
+\titlespacing*{\subsubsection}{0pt}{8pt}{3pt}
+
+% ===== header / footer =====
+\usepackage{fancyhdr}
+\newcommand{\hfrule}{\renewcommand{\headrulewidth}{1.4pt}%
+  \renewcommand{\headrule}{{\color{brandMid}\hrule height \headrulewidth}}}
+\pagestyle{fancy}\fancyhf{}\hfrule
+\fancyhead[L]{\footnotesize\textbf{\color{brandDark}\DocTag}\ \ \color{ink}\RunningTitle}
+\fancyhead[R]{\footnotesize\color{brand}\thepage}
+\fancyfoot[C]{\footnotesize\color{ink}\textemdash\ \thepage\ \textemdash}
+\fancypagestyle{plain}{\fancyhf{}\hfrule
+  \fancyhead[R]{\footnotesize\color{brand}\thepage}
+  \fancyfoot[C]{\footnotesize\color{ink}\textemdash\ \thepage\ \textemdash}}
+
+% ===== blockquote -> callout =====
+\usepackage[most]{tcolorbox}
+\renewenvironment{quote}
+ {\begin{tcolorbox}[enhanced,breakable,colback=quoteBg,colframe=quoteBg,
+    boxrule=0pt,arc=2pt,left=12pt,right=10pt,top=6pt,bottom=6pt,
+    borderline west={3.5pt}{0pt}{brand}]\color{brandDark}}
+ {\end{tcolorbox}}
+
+% ===== tables (colored rules + zebra rows) =====
+\PassOptionsToPackage{table}{xcolor}
+\usepackage{colortbl}
+\arrayrulecolor{brandMid}
+\makeatletter
+\@ifundefined{rowcolors}{}{\rowcolors{2}{brandLite}{white}}
+\makeatother
+
+% ===== title block =====
+\usepackage{titling}
+\pretitle{\begin{center}\vspace*{6pt}{\color{rulec}\hrule height 2.4pt}\vspace{14pt}\LARGE\bfseries\color{brandDark}}
+\posttitle{\par\vspace{12pt}{\color{rulec}\hrule height 2.4pt}\end{center}\vspace{8pt}}

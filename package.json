@@ -1,6 +1,6 @@
 {
   "name": "meiseki",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトする Agent Skill の決定論層。",
   "scripts": {
@@ -9,6 +9,7 @@
     "lint:md": "npx --min-release-age=7 --yes --package markdownlint-cli@0.49.1 markdownlint --config .agents/skills/meiseki/references/markdownlint.config.jsonc",
     "vocab:yorisoi": "node scripts/yorisoi-vocab-check.js",
     "test:hook": "bash scripts/test-meiseki-check.sh",
-    "test:yorisoi": "bash scripts/test-yorisoi.sh"
+    "test:yorisoi": "bash scripts/test-yorisoi.sh",
+    "test:rikai": "python3 -m unittest discover -s scripts/tests -p 'test_rikai_*.py' -v"
   }
 }

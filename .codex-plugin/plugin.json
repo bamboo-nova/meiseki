@@ -1,6 +1,6 @@
 {
   "name": "meiseki",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "AIが書いた日本語ドキュメントから読解負荷の高い構文を削ぎ落とし、一読で理解できる本文に書き直すプラグイン。textlint(preset-ja-technical-writing + preset-ai-writing + prh)による決定論検出と、LLMによる文脈判断の二層構成。やさしい日本語化スキル(meiseki:yorisoi)も同梱。",
   "skills": "./.agents/skills/",
   "hooks": "./hooks/codex-hooks.json"

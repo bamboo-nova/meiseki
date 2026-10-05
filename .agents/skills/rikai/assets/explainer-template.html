@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{SOURCE_NAME}} 絵解きノート</title>
+<style>
+/* 1 カラムの絵本。論点ごとに「大きな絵 → ひとこと → きちんと言うと → 迷いどころ → 教科書の言葉」を縦に並べる。
+   明るい面はノート、暗い面は黒板とチョークの色。色はすべて下のトークンから取る。 */
+:root {
+  color-scheme: light dark;
+  --bg: #EFF3F8; --paper: #FFFFFF; --ink: #1B2A47; --ink-soft: #56637C; --line: #C5D0E0; --tint: #DCE6F5;
+  --marker: #FFD84A; --marker-soft: #FFE98A; --on-marker: #1B2A47; --blue: #2B66D9;
+  --ok: #1F9D6B; --ok-bg: #D9F2E5; --ok-ink: #0E6541;
+  --ng: #DD4F38; --ng-bg: #FBE2DC; --ng-ink: #A22E1B; --on-ng: #FFFFFF;
+  --display: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --body: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13201B; --paper: #1B2C25; --ink: #EEF3EA; --ink-soft: #A8B8AD; --line: #3B5046; --tint: #2A4136;
+    --marker: #F2CF4B; --marker-soft: #665612; --on-marker: #1B2A47; --blue: #86B6FF;
+    --ok: #6FD3A3; --ok-bg: #1E3F31; --ok-ink: #9BE8C2;
+    --ng: #FF8E7A; --ng-bg: #4A261E; --ng-ink: #FFB0A1; --on-ng: #2A1410;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.85; }
+.wrap { max-width: 720px; margin-inline: auto; padding-inline: 20px; padding-block: 44px 72px; display: grid; gap: 48px; }
+.wrap > * { min-width: 0; }
+h1, h2, p, figure, ol, ul, blockquote { margin: 0; }
+a { color: var(--blue); }
+a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+.top { display: grid; gap: 14px; }
+.eyebrow { font-size: 13px; color: var(--ink-soft); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 8vw, 46px); line-height: 1.25; }
+.lead { font-size: 17px; max-width: 34em; }
+.score { display: grid; gap: 8px; padding-block: 8px; }
+.num { font-family: var(--display); font-weight: 700; font-size: 18px; display: flex; align-items: baseline; gap: 8px; }
+.num b { font-size: 60px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.legend { font-size: 14px; color: var(--ink-soft); }
+
+main { display: grid; gap: 56px; }
+.q { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.q > * { min-width: 0; }
+.q + .q { border-top: 2px dashed var(--line); padding-top: 52px; }
+.qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.qno { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--ink-soft); }
+.chip { font-family: var(--display); font-weight: 700; font-size: 13px; padding: 2px 12px; border-radius: 999px; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.chip.ng { background: var(--ng-bg); color: var(--ng-ink); }
+h2 { font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1.4; }
+.pic { background: var(--paper); border: 2px solid var(--ink); border-radius: 18px 22px 16px 24px; padding: 14px; }
+.pic svg { display: block; width: 100%; height: auto; }
+.cap { font-size: 13px; color: var(--ink-soft); font-family: var(--display); padding-top: 10px; }
+.hitokoto { font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1.6; }
+.hitokoto mark { background: linear-gradient(transparent 58%, var(--marker-soft) 58%); color: inherit; padding-inline: 2px; }
+.kichinto { max-width: 36em; }
+.label { display: block; font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--ink-soft); letter-spacing: 0.06em; }
+.mayoi { background: var(--tint); border-radius: 14px; padding: 14px 18px; }
+blockquote { font-size: 14px; color: var(--ink-soft); line-height: 1.75; }
+blockquote p + p { margin-top: 4px; }
+
+/* 絵（SVG）の部品。色は必ずこれらのクラスで付ける */
+svg text { font-family: var(--display); fill: var(--ink); }
+.t { font-size: 17px; font-weight: 700; }
+.s { font-size: 13px; font-weight: 500; fill: var(--ink-soft); }
+.big { font-size: 28px; font-weight: 900; }
+.on-marker { fill: var(--on-marker); }
+.st { stroke: var(--ink); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.sk { stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.f-paper { fill: var(--paper); }
+.f-tint { fill: var(--tint); }
+.f-marker { fill: var(--marker); }
+.f-ink { fill: var(--ink); }
+.f-ok { fill: var(--ok); }
+.f-ng { fill: var(--ng); }
+.f-blue { fill: var(--blue); }
+.ico { stroke: currentColor; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 絵の代わりに使える HTML の部品。rows は順序や階層、tiles は並列の比較 */
+.rows { list-style: none; padding: 0; display: grid; gap: 8px; }
+.rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 14px; border-radius: 12px; background: var(--tint); line-height: 1.55; }
+.rows b { font-family: var(--display); font-weight: 900; }
+.rows span { flex: 1 1 200px; min-width: 0; font-size: 14.5px; }
+.rows .tag { flex: none; font-family: var(--display); font-weight: 700; font-size: 13px; padding: 1px 10px; border-radius: 999px; background: var(--ink); color: var(--paper); }
+.rows .tag.free { background: transparent; color: inherit; border: 2px dashed currentColor; }
+.rows .hit { background: var(--marker); color: var(--on-marker); }
+.rows .hit .tag { background: var(--on-marker); color: var(--marker); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--tint); border-radius: 14px; padding: 14px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.tile svg { width: 52px; height: 52px; }
+.tile b { font-family: var(--display); font-weight: 900; font-size: 19px; }
+.tile span { font-size: 14px; line-height: 1.6; }
+.tile.hit { background: var(--marker); color: var(--on-marker); }
+
+footer { font-size: 13px; color: var(--ink-soft); line-height: 1.8; border-top: 2px dashed var(--line); padding-top: 28px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">{{SOURCE_NAME}} ／ 最終更新 {{UPDATED}}</p>
+  <h1>絵解きノート</h1>
+  <p class="lead">挑戦した論点を、大きな絵とひとことで振り返ります。細かい定義や数式は、同じフォルダのテキストブックにまとめています（PDF がなければ、原稿の <code>.tex</code>）。</p>
+  <!-- rikai:progress:start -->
+  <!-- rikai:progress:end -->
+</header>
+<main>
+<!-- rikai:topics:start -->
+<!-- rikai:topics:end -->
+</main>
+<footer>
+  <p>正答と「教科書の言葉」の根拠は、すべて {{SOURCE_NAME}} です。たとえ話のうち資料にないものは、このノートのために足した絵解きです。</p>
+</footer>
+</div>
+</body>
+</html>

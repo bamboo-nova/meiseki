@@ -85,17 +85,32 @@ meiseki/
 │   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
 │   │       ├── textlint.config.json    # textlint config narrowed to rules that affect reading load
 │   │       └── markdownlint.config.jsonc # Minimal rule set for the Markdown-syntax regression guard
-│   └── yorisoi/
-│       ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
-│       ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
-│       └── references/
-│           ├── patterns-yorisoi.md    # Guideline-derived rewrite catalog YA–YH
-│           ├── prh-yorisoi.yml        # Detection dictionary: passive, speculation, honorifics, notation
-│           ├── textlint-yorisoi.config.json
-│           └── vocab/                  # Vocabulary lists (sources and licenses in its README)
+│   ├── yorisoi/
+│   │   ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
+│   │   ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
+│   │   └── references/
+│   │       ├── patterns-yorisoi.md    # Guideline-derived rewrite catalog YA–YH
+│   │       ├── prh-yorisoi.yml        # Detection dictionary: passive, speculation, honorifics, notation
+│   │       ├── textlint-yorisoi.config.json
+│   │       └── vocab/                  # Vocabulary lists (sources and licenses in its README)
+│   ├── rikai/
+│   │   ├── SKILL.md         # LLM orchestrator for the comprehension-check skill
+│   │   ├── references/
+│   │   │   ├── question-design.md     # Rules for multiple-choice and fresh-angle review questions
+│   │   │   ├── study-format.md        # Storage format for learning history and the writer feedback report
+│   │   │   ├── quiz-format.md         # Format of quiz data, answers, and answer codes
+│   │   │   ├── explainer-html.md      # How to write the picture notebook
+│   │   │   └── explainer-textbook.md  # How to write the textbook
+│   │   ├── assets/          # Templates for the quiz form and picture notebook, LaTeX style for the textbook
+│   │   └── scripts/         # build_quiz.py / quiz_server.py / build_textbook.py (Python standard library only)
+│   └── jp-pdf/              # Japanese Markdown -> styled PDF (pandoc/xelatex)
+│       ├── SKILL.md
+│       ├── scripts/         # build_pdf.py / svglib.py
+│       └── assets/style.tex
 ├── examples/
 │   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
 │   ├── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
+│   ├── rikai/              # Example source, learning history, and explainers (picture notebook and textbook)
 │   └── markdownlint/        # Markdown-syntax check examples (samples firing all 13 rules)
 ├── package.json             # Provides npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* for development
 └── README.md
@@ -104,6 +119,7 @@ meiseki/
 ## Requirements
 
 - Node.js installed
+- For `rikai`: Python 3.8 or later (to serve the form). To also build the textbook PDF, xelatex (optional; see the `rikai` section for installation)
 
 ## Installation
 
@@ -200,7 +216,9 @@ original is lost, so guessing a replacement would fabricate meaning.
 
 ## Plain Japanese skill `meiseki:yorisoi` (since v0.6.0)
 
-A second skill that rewrites documents into "yorisoi nihongo" (plain Japanese) for foreign
+`yorisoi`（寄り添い）= "staying close to the reader." The rewrite meets readers at their own vocabulary level.
+
+A second skill that rewrites documents into "yasashii nihongo" (plain Japanese) for foreign
 residents and Japanese learners. It differs from meiseki in **target reader**: use meiseki to
 polish prose for native readers, and yorisoi for readers still learning Japanese. Example triggers:
 
@@ -231,6 +249,68 @@ It keeps the same two-layer architecture and adds an **official external norm** 
 Development commands: `npm run lint:yorisoi -- <md>` (syntax detection) and
 `npm run vocab:yorisoi -- <md>` (vocabulary check). Worked examples with measured scores live in
 `examples/yorisoi/`.
+
+## Reading-comprehension check skill `meiseki:rikai` (since v0.8.0)
+
+`rikai`（理解）= "understanding; comprehension." It checks whether a document was understood, not just read.
+
+`rikai` is the third skill. It asks multiple-choice questions drawn from a source document and checks whether the reader understands its claims, assumptions, and exceptions.
+
+Example triggers:
+
+- "Check my understanding of this document"
+- "Quiz me on this document"
+- "Continue reviewing from last time"
+
+All questions are placed on a single-page form that opens in the browser. Answer every question, submit once, and a results table appears in the terminal. The default is 10 questions; ask for a different number if you like ("5 questions").
+
+Questions and explanations are written in the language you ask in (ask in Japanese and you get Japanese; ask in English and you get English). Quotations from the source stay in the source's language. If a document already has explainers, new topics are added in their language; ask to switch and they are rewritten in the new one.
+
+Answers are collected by the first available method:
+
+1. Local server. A bundled script serves the form on `127.0.0.1` and receives the submission. In Claude Code the session resumes as soon as you submit
+2. Pasted answer code. The form shows a code such as `1:b 2:a`, which you paste into the terminal
+3. Plain text. Where no browser is available, all questions are shown as text
+
+Topics you got wrong last time are included first when the next quiz is assembled. Questions appear in random order, and the results table tells you which ones were review questions. A topic is never asked twice in the same session.
+
+Only topics you got wrong are reviewed. A topic answered correctly with no prior mistake graduates immediately and is not asked again.
+
+Under the **three-attempt rule**, a topic you once got wrong graduates after three correct answers in total. A later mistake does not reset the count.
+
+Explanations accumulate in two explainers with different roles. Each source document has one pair, and the topics you attempt are added after every session.
+
+| File | Role |
+|---|---|
+| `report.explainer.html` | Picture notebook. Builds intuition with large pictures and one-line analogies. A standalone file that makes no network requests |
+| `report.explainer.pdf` | Textbook. Works through definitions, formulas, and worked examples. Typeset with LaTeX; the manuscript is `report.explainer.tex` |
+
+Learning history is saved in a `study.md` file inside a `.rikai/` folder next to the source document. The explainers live in the same folder.
+
+When the source name ends in `.md`, that extension is replaced with `.study.md`.
+
+Otherwise `.study.md` is appended to the original name, for example `report.pdf.study.md`.
+
+The body of `study.md` holds a writer feedback report that aggregates the passages most often misread.
+
+The writer can revise those passages with `meiseki`, then run `rikai` again to close the feedback loop.
+
+Serving the form requires Python 3.
+
+The textbook PDF is optional and needs xelatex. Without it, quizzes, grading, and the picture notebook still work. The manuscript (`.tex`) is extended every session, so once you install xelatex the next build produces a PDF covering every topic so far. `rikai` never installs it for you.
+
+| OS | How to install |
+|---|---|
+| macOS | `brew install --cask mactex-no-gui`, or [MacTeX](https://www.tug.org/mactex/) |
+| Debian / Ubuntu | `sudo apt install texlive-xetex texlive-lang-japanese texlive-latex-extra texlive-pictures` |
+| Other Linux | [TeX Live](https://www.tug.org/texlive/) |
+| Windows | `install-tl-windows.exe` from [TeX Live](https://www.tug.org/texlive/windows.html) |
+
+IPAexGothic is the preferred Japanese font; if it is missing, a font already on the system is used (Hiragino Sans, Yu Gothic, or Noto Sans CJK JP).
+
+`rikai` is excluded from the auto-apply hook and runs only on request.
+
+See `examples/rikai/` for a source document, learning history, explainers, writer feedback report, and reproduction steps.
 
 ## Auto-apply hook (when used as a plugin)
 
@@ -266,10 +346,10 @@ Claude Writes / Edits report.md
   not affect the judgment. This addresses false positives on references, math, and captions in academic documents.
 - **Tests**: `npm run test:hook` (= `scripts/test-meiseki-check.sh`) is provided.
   It automatically tests the supplement dictionary's detection coverage and the hook's judgment, exclusions, masking, opt-out, and loop prevention.
-- **Exclusions**: `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md`; anything under `.claude/`, `plans/`, `memory/`,
+- **Exclusions**: `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md` / `*.study.md`; anything under `.claude/`, `plans/`, `memory/`,
   `node_modules/`, `.git/`, `scratchpad/`, `/tmp`; anything under `examples/` or `references/`;
   files containing no Japanese.
-- **Loop prevention**: at most 2 blocks per file per session; after that, warnings only
+- **Loop prevention**: at most 2 blocks per file per session; after that, warnings only (changed content is still re-checked, and the warning reports the current result)
   (to stay consistent with the guardrail that prh findings are "not confirmed deletions").
   Judgments are recorded in a state file keyed by content hash (`$TMPDIR/meiseki-hook-state.tsv`);
   re-writing identical content replays the previous judgment without running textlint.

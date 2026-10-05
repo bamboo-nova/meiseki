@@ -84,17 +84,32 @@ meiseki/
 │   │       ├── prh-llm-phrases.yml     # LLM 定型句の検出辞書（カテゴリ G・検出専用）
 │   │       ├── textlint.config.json    # 読解負荷に効くルールだけに絞った textlint 設定
 │   │       └── markdownlint.config.jsonc # Markdown 構文のリグレッションガード用の最小ルールセット
-│   └── yorisoi/
-│       ├── SKILL.md         # やさしい日本語化スキルの LLM オーケストレーター
-│       ├── scripts/vocab-check.js      # 語彙レベル判定（形態素解析 + 同梱リスト照合）
-│       └── references/
-│           ├── patterns-yorisoi.md    # ガイドライン由来の書き換えカタログ YA–YH
-│           ├── prh-yorisoi.yml        # 受身・推測・敬語・表記規則の検出辞書
-│           ├── textlint-yorisoi.config.json
-│           └── vocab/                  # 語彙リスト（出典・ライセンスは同ディレクトリの README）
+│   ├── yorisoi/
+│   │   ├── SKILL.md         # やさしい日本語化スキルの LLM オーケストレーター
+│   │   ├── scripts/vocab-check.js      # 語彙レベル判定（形態素解析 + 同梱リスト照合）
+│   │   └── references/
+│   │       ├── patterns-yorisoi.md    # ガイドライン由来の書き換えカタログ YA–YH
+│   │       ├── prh-yorisoi.yml        # 受身・推測・敬語・表記規則の検出辞書
+│   │       ├── textlint-yorisoi.config.json
+│   │       └── vocab/                  # 語彙リスト（出典・ライセンスは同ディレクトリの README）
+│   ├── rikai/
+│   │   ├── SKILL.md         # 読解度チェックスキルの LLM オーケストレーター
+│   │   ├── references/
+│   │   │   ├── question-design.md     # 選択式問題と別角度の復習問題の設計規則
+│   │   │   ├── study-format.md        # 学習履歴と還流レポートの保存形式
+│   │   │   ├── quiz-format.md         # 出題データ・回答・回答コードの形式
+│   │   │   ├── explainer-html.md      # 絵解きノートの書き方
+│   │   │   └── explainer-textbook.md  # テキストブックの書き方
+│   │   ├── assets/          # 出題フォームと絵解きノートの雛形、テキストブックの LaTeX スタイル
+│   │   └── scripts/         # build_quiz.py / quiz_server.py / build_textbook.py（Python 標準ライブラリのみ）
+│   └── jp-pdf/              # 日本語 Markdown → 配色付き PDF（pandoc/xelatex）
+│       ├── SKILL.md
+│       ├── scripts/         # build_pdf.py / svglib.py
+│       └── assets/style.tex
 ├── examples/
 │   ├── meiseki/             # 明晰化の適用例（before/after 9 ペア + 実測 RLS）
 │   ├── yorisoi/            # やさしい日本語化の適用例（before/after 3 ペア + 実測 YLS）
+│   ├── rikai/              # 読解度チェックの資料・学習履歴・explainer（絵解きノートとテキストブック）の例
 │   └── markdownlint/        # Markdown 構文検査の適用例（全13ルールの発火サンプル）
 ├── package.json             # 開発用の npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* を提供
 └── README.md
@@ -103,6 +118,7 @@ meiseki/
 ## 必要環境
 
 - Node.js がインストールされていること
+- `rikai` を使う場合: Python 3.8 以上（フォームの配信）。テキストブックの PDF も作るなら xelatex（任意。導入方法は `rikai` の節）
 
 ## インストール
 
@@ -196,6 +212,8 @@ U+FFFD は元の文字が失われていて推測復元が危険なため、正�
 
 ## やさしい日本語化スキル `meiseki:yorisoi`（v0.6.0 から）
 
+`yorisoi`（寄り添い）＝読み手の語彙のレベルに合わせて書くこと。
+
 在留外国人や日本語学習者にも伝わる「やさしい日本語」への書き換えを行う第2のスキル。
 明晰化（meiseki）とは**対象読者が違う**。日本語ネイティブ向けの推敲は meiseki、
 日本語に不慣れな読者向けの書き換えは yorisoi を使う。発動例：
@@ -221,6 +239,68 @@ U+FFFD は元の文字が失われていて推測復元が危険なため、正�
 
 開発用コマンド：`npm run lint:yorisoi -- <md>`（構文検出）、`npm run vocab:yorisoi -- <md>`（語彙判定）。
 適用例と実測スコアは `examples/yorisoi/` にある。
+
+## 読解度チェックスキル `meiseki:rikai`（v0.8.0 から）
+
+`rikai`（理解）＝読んだ内容を正しく分かること。
+
+`rikai` は資料から選択式の問題を出し、主張・前提・例外の理解を確かめる第3のスキル。
+
+発動例：
+
+- 「この資料の理解度を確認して」
+- 「この資料でクイズして」
+- 「前回の続きから内容を復習したい」
+
+問題は全問を 1 ページのフォームにまとめ、ブラウザで開く。全問に答えて提出すると、採点結果の表がターミナルに出る。既定は 10 問で、「5 問で」のように数を指定できる。
+
+問題と解説は、依頼に使った言語で書かれる（日本語で頼めば日本語、英語で頼めば英語）。原文の引用は資料の言語のままである。すでに解説（絵解きノートやテキストブック）がある資料では、その言語のまま書き足す。別の言語にしたいときは、そう頼めば全体を書き直す。
+
+回答の受け取りは、その場で使える手段を次の順で選ぶ。
+
+1. ローカルサーバ。同梱のスクリプトが `127.0.0.1` でフォームを配信し、提出を受け取る。Claude Code では、提出と同時にセッションが再開する
+2. 回答コードの貼り付け。フォームが `1:b 2:a` 形式のコードを表示するので、ターミナルに貼る
+3. テキスト。ブラウザを使えない環境では、全問をテキストで提示する
+
+前回誤答した論点は、次の出題に優先して含める。出題の順番は無作為で、どれが復習問題だったかは採点結果の表で分かる。同じ論点は同一セッションで再出題しない。
+
+復習の対象は誤答した論点だけとする。誤答なしで正解した論点は、その時点で卒業として再出題しない。
+
+**三回挑戦法**では、誤答を経験した論点を通算 3 回の正解で卒業とする。途中の誤答で回数をリセットしない。
+
+解説は、役割の違う 2 つの explainer に蓄積する。どちらも資料 1 つにつき 1 組で、挑戦した論点がセッションのたびに書き足される。
+
+| ファイル | 役割 |
+|---|---|
+| `report.explainer.html` | 絵解きノート。大きな絵とひとことのたとえで直感をつかむ。単体で開け、外部通信をしない |
+| `report.explainer.pdf` | テキストブック。定義・数式・例題で細部を詰める。LaTeX で組む。原稿は `report.explainer.tex` |
+
+学習履歴は、対象資料と同じ階層の `.rikai/` フォルダ内の `study.md` に保存する。explainer も同じフォルダに置く。
+
+資料名が `.md` で終わる場合は、その拡張子を `.study.md` に置き換える。
+
+それ以外は元のファイル名に `.study.md` を加える。たとえば `report.pdf.study.md` となる。
+
+`study.md` の本文には、誤読が集中した段落を集計した書き手向けの還流レポートを置く。
+
+書き手はこのレポートを基に `meiseki` で原文を直し、再び `rikai` で理解を確認できる。
+
+フォームの配信には Python 3 を使う。
+
+テキストブックの PDF は任意の機能で、作るには xelatex が要る。xelatex がなくても、出題・採点・絵解きノートは動く。原稿（`.tex`）は毎回書き足されるので、後から導入すれば、次のビルドでそれまでの全論点が PDF になる。`rikai` が自動でインストールすることはない。
+
+| OS | 導入方法 |
+|---|---|
+| macOS | `brew install --cask mactex-no-gui`、または [MacTeX](https://www.tug.org/mactex/) |
+| Debian / Ubuntu | `sudo apt install texlive-xetex texlive-lang-japanese texlive-latex-extra texlive-pictures` |
+| その他の Linux | [TeX Live](https://www.tug.org/texlive/) |
+| Windows | [TeX Live](https://www.tug.org/texlive/windows.html) の `install-tl-windows.exe` |
+
+日本語フォントは IPAexGothic を優先し、なければ OS に入っているフォント（ヒラギノ角ゴシック、游ゴシック、Noto Sans CJK JP）を使う。
+
+`rikai` は自動適用 hook の対象外で、依頼されたときだけ動く。
+
+資料、学習履歴、explainer、還流レポートの例と再現方法は `examples/rikai/` にある。
 
 ## 自動適用 hook（プラグイン利用時）
 
@@ -256,10 +336,10 @@ Claude が report.md を Write / Edit
   誤検知される問題への対策。
 - **テスト**：`npm run test:hook`（= `scripts/test-meiseki-check.sh`）を用意した。
   補完辞書の検出網羅と、hook の判定・除外・マスキング・opt-out・ループ防止を自動テストできる。
-- **除外**：`CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md`、`.claude/` `plans/` `memory/`
+- **除外**：`CLAUDE.md` / `AGENTS.md` / `MEMORY.md` / `SKILL.md` / `*.study.md`、`.claude/` `plans/` `memory/`
   `node_modules/` `.git/` `scratchpad/` `/tmp` 配下、`examples/`・`references/` 配下、
   日本語を含まないファイル。
-- **ループ防止**：同一セッション・同一ファイルへの block は最大 2 回。以降は警告のみ
+- **ループ防止**：同一セッション・同一ファイルへの block は最大 2 回。以降は警告のみ（内容が変われば検査はやり直し、警告にはその時点の結果を出す）
   （prh 指摘は「削除確定ではない」というガードレールと整合させるため）。
   判定は内容ハッシュ入りのステート（`$TMPDIR/meiseki-hook-state.tsv`）に記録され、
   同一内容の再書き込みは textlint を実行せず前回判定をリプレイする。

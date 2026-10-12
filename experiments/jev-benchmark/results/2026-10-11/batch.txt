@@ -1,0 +1,13 @@
+bench:jev --batch — 8 問を 1 リクエストで判定(実運用形)
+  G-takakuteki-empty: 一致 (期待 false / p=0.21) → 差し戻し
+  G-takakuteki-sub: 一致 (期待 true / p=0.94) → 採用
+  H-restate: 一致 (期待 true / p=0.86) → 採用
+  H-adds-info: 一致 (期待 false / p=0.09) → 採用
+  A-not-litotes: 一致 (期待 false / p=0.46) → 差し戻し
+  A-litotes: 一致 (期待 true / p=0.78) → 差し戻し
+  G-kakushin-empty: 一致 (期待 false / p=0.09) → 採用
+  H-clear-keep: 一致 (期待 false / p=0.10) → 採用
+レイテンシ: 218ms(8 問一括)
+---
+生の一致率: 8/8 (100%)
+採用帯(p>=0.8 / p<=0.2): 採用 5 問(正解 5/5)、LLM へ差し戻し 3 問

@@ -1,0 +1,13 @@
+bench:jev — 8 ケース(G/H/A)を 1 件ずつ判定(--batch で一括形も測れる)
+  G-takakuteki-empty: 不一致 (期待 false / p=0.50) 365ms
+  G-takakuteki-sub: 一致 (期待 true / p=0.94) 486ms
+  H-restate: 一致 (期待 true / p=0.89) 275ms
+  H-adds-info: 一致 (期待 false / p=0.07) 233ms
+  A-not-litotes: 不一致 (期待 false / p=0.70) 254ms
+  A-litotes: 一致 (期待 true / p=0.74) 347ms
+  G-kakushin-empty: 一致 (期待 false / p=0.20) 2325ms
+  H-clear-keep: 一致 (期待 false / p=0.11) 362ms
+レイテンシ: 合計 4647ms / 平均 581ms / p50 362ms
+---
+生の一致率: 6/8 (75%)
+採用帯(p>=0.8 / p<=0.2): 採用 5 問(正解 5/5)、LLM へ差し戻し 3 問

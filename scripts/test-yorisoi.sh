@@ -123,6 +123,26 @@ MEISEKI_LINT_PACKAGES="textlint@14.8.4 textlint-rule-preset-ja-technical-writing
 bash scripts/meiseki-lint-core.sh "$TESTDIR/viol.md" >/dev/null || RC=$?
 assert_eq "lint-core を yorisoi 構成で実行すると block(rc=1)" "1" "$RC"
 
+
+echo ""
+echo "Part 3: Jev オプトイン(文書レベル判定は既定で外部送信しない)"
+
+# キーがあっても既定では Jev を呼ばない(案内行が出て、(Jev) の判定行は出ない)
+OUT_DEF=$(TYPESAFE_API_KEY=dummy TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" \
+  node .agents/skills/yorisoi/scripts/vocab-check.js examples/meiseki/09-academic-document.before.md 2>/dev/null)
+printf '%s' "$OUT_DEF" | grep -q "Jev による採点は未実行"
+assert_eq "既定ではキーがあっても Jev 未実行の案内が出る" "0" "$?"
+printf '%s' "$OUT_DEF" | grep -q "文書全体レベル(Jev)"
+assert_eq "既定では (Jev) の判定行が出ない" "1" "$?"
+
+# 明示オプトイン時は送信を試みる(接続不能なら近似へフォールバックし、案内行は出ない)
+OUT_OPT=$(TYPESAFE_API_KEY=dummy TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=2000 \
+  node .agents/skills/yorisoi/scripts/vocab-check.js --typesafe-level examples/meiseki/09-academic-document.before.md 2>/dev/null)
+printf '%s' "$OUT_OPT" | grep -q "Jev による採点は未実行"
+assert_eq "オプトイン時は未実行の案内が出ない" "1" "$?"
+printf '%s' "$OUT_OPT" | grep -q "jReadability 近似"
+assert_eq "オプトイン+API 失敗時は近似へフォールバックする" "0" "$?"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

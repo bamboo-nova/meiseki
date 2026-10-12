@@ -10,111 +10,30 @@ It never adds voice, stance, or personality to the text. It runs in the **opposi
 
 日本語版 README は [README.md](./README.md) を参照してください。
 
-## What it fixes
+## Table of contents
 
-It targets **syntax** that is hard to parse even for native Japanese readers (the cause of hard-to-read text is syntax, not difficult vocabulary).
+- [Bundled skills](#bundled-skills)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Clarity skill meiseki:meiseki](#clarity-skill-meisekimeiseki)
+- [Plain Japanese skill meiseki:yorisoi (since v0.6.0)](#plain-japanese-skill-meisekiyorisoi-since-v060)
+- [Reading-comprehension check skill meiseki:rikai (since v0.8.0)](#readingcomprehension-check-skill-meisekirikai-since-v080)
+- [PDF conversion skill meiseki:jp-pdf (since v0.8.0)](#pdf-conversion-skill-meisekijppdf-since-v080)
+- [Auto-apply hook (when used as a plugin)](#autoapply-hook-when-used-as-a-plugin)
+- [Directory layout](#directory-layout)
+- [References](#references)
+- [Disclaimer](#disclaimer)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
 
-- Double negatives (litotes) / nested negation and conditionals
-- Long pre-nominal modifiers / long subject–predicate distance / overloaded single sentences
-- Chains of the particle「の」/ excessive nominalization and Sino-Japanese compounds
-- Redundant or empty expressions (e.g.「することができます」)
-- Excessive formatting such as overused bold-plus-colon bullet lists
-- Three or more coordinate items buried in one sentence (unfolded into a bullet list)
-- LLM boilerplate phrases (「重要なのは〜」,「掘り下げる」,「多角的」,「〜に他ならない」, etc. — machine-detected with the bundled prh dictionary)
-- AI-flavored formatting and hype words (emoji bullet lists, bold-plus-colon list boilerplate,「革命的」("revolutionary"),「ゲームチェンジャー」("game changer"), etc. — machine-detected with `textlint-rule-preset-ai-writing`)
-- Paragraph-level redundancy (repeated restatements of the same claim, re-summarizing right after a description, parallel facts scattered across paragraphs)
+## Bundled skills
 
-**In scope**: technical articles, READMEs, design documents, internal documentation, explanatory blog prose.
-**Out of scope**: code itself, short social-media posts, creative writing such as fiction and poetry, and precision-critical legal / medical / academic texts.
-
-## Architecture (two layers)
-
-```
-Input: Japanese document (manuscript)
-        │
-        ▼
-[meiseki skill / LLM orchestrator]
-        │
-        ├──▶ textlint (run via npx — deterministic layer)
-        │       Detects double negatives, sentence length, excessive commas,
-        │       long kanji runs, redundancy, LLM boilerplate (bundled prh
-        │       dictionary), AI-flavored formatting and hype words
-        │       (preset-ai-writing), etc., as machine-readable JSON with
-        │       line/column info → reading-load score (before)
-        │
-        └──▶ Pattern catalog A–H (LLM judgment layer)
-                Handles syntax textlint cannot catch:
-                long pre-nominal modifiers,「の」chains, nominalization,
-                unfolding enumerations into lists (F), context-dependent
-                judgment of boilerplate (G), removing paragraph-level
-                repetition (H)
-        │
-        ▼
-   Rewrite → re-run textlint to verify before→after
-        │
-        ▼
-Output: clarified body text only (+ optionally the reading-load score)
-```
-
-- **Detection and scoring belong to textlint (deterministic layer)**; **rewriting belongs to the skill (LLM layer)**.
-- The LLM covers syntax textlint cannot catch (pre-nominal modifiers,「の」chains, general nominalization, enumerations).
-  **This "part textlint cannot catch" is exactly what separates meiseki from a plain textlint config.**
-- No MCP server. textlint is invoked via `npx`, which ships with Node.js.
-
-## Directory layout
-
-```
-meiseki/
-├── .claude-plugin/          # Claude Code plugin manifest
-├── .codex-plugin/           # Codex CLI plugin manifest
-├── hooks/
-│   ├── hooks.json           # PostToolUse hook definition for Claude Code
-│   └── codex-hooks.json     # PostToolUse hook definition for Codex CLI
-├── scripts/
-│   ├── meiseki-lint-core.sh     # Deterministic-layer core: masking + textlint + threshold check (rule set swappable via env vars)
-│   ├── meiseki-check.sh         # Claude Code adapter: JSON I/O and re-run guard
-│   ├── codex-hook.sh            # Codex adapter: extracts paths from the apply_patch envelope and bridges
-│   ├── yorisoi-vocab-check.js  # Wrapper for the vocabulary-level checker (core ships inside the skill)
-│   ├── test-meiseki-check.sh    # Automated tests for the hook and the prh supplement dictionary (npm run test:hook)
-│   └── test-yorisoi.sh         # Automated tests for yorisoi detection and vocabulary checks (npm run test:yorisoi)
-├── .agents/skills/          # Standard Agent Skills location (shared by Claude Code and Codex)
-│   ├── meiseki/
-│   │   ├── SKILL.md         # LLM orchestrator for the clarity skill
-│   │   └── references/
-│   │       ├── patterns.md             # High-load syntax catalog A–H
-│   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
-│   │       ├── textlint.config.json    # textlint config narrowed to rules that affect reading load
-│   │       └── markdownlint.config.jsonc # Minimal rule set for the Markdown-syntax regression guard
-│   ├── yorisoi/
-│   │   ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
-│   │   ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
-│   │   └── references/
-│   │       ├── patterns-yorisoi.md    # Guideline-derived rewrite catalog YA–YH
-│   │       ├── prh-yorisoi.yml        # Detection dictionary: passive, speculation, honorifics, notation
-│   │       ├── textlint-yorisoi.config.json
-│   │       └── vocab/                  # Vocabulary lists (sources and licenses in its README)
-│   ├── rikai/
-│   │   ├── SKILL.md         # LLM orchestrator for the comprehension-check skill
-│   │   ├── references/
-│   │   │   ├── question-design.md     # Rules for multiple-choice and fresh-angle review questions
-│   │   │   ├── study-format.md        # Storage format for learning history and the writer feedback report
-│   │   │   ├── quiz-format.md         # Format of quiz data, answers, and answer codes
-│   │   │   ├── explainer-html.md      # How to write the picture notebook
-│   │   │   └── explainer-textbook.md  # How to write the textbook
-│   │   ├── assets/          # Templates for the quiz form and picture notebook, LaTeX style for the textbook
-│   │   └── scripts/         # build_quiz.py / quiz_server.py / build_textbook.py (Python standard library only)
-│   └── jp-pdf/              # Japanese Markdown -> styled PDF (pandoc/xelatex)
-│       ├── SKILL.md
-│       ├── scripts/         # build_pdf.py / svglib.py
-│       └── assets/style.tex
-├── examples/
-│   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
-│   ├── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
-│   ├── rikai/              # Example source, learning history, and explainers (picture notebook and textbook)
-│   └── markdownlint/        # Markdown-syntax check examples (samples firing all 13 rules)
-├── package.json             # Provides npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* for development
-└── README.md
-```
+| Skill | What it does |
+|---|---|
+| 📝 **meiseki** | Strips high-reading-load syntax out of AI-written Japanese and rewrites it into prose you understand in one pass, without changing voice or meaning |
+| 🤝 **yorisoi** | Rewrites text into Plain Japanese following the Immigration Services Agency guideline, with machine-checked vocabulary levels and a document-level N estimate |
+| ✅ **rikai** | Builds comprehension quizzes from a document; wrong answers return later from a different angle, and explanations accumulate in study notes and PDF |
+| 📄 **jp-pdf** | Converts Japanese Markdown into styled offline PDFs (also used for rikai's study notes) |
 
 ## Requirements
 
@@ -190,7 +109,53 @@ claude plugin install meiseki@bamboo-nova-ja-tools
 
 Restart the session after updating to activate the new hook.
 
-## Usage
+## Clarity skill `meiseki:meiseki`
+
+The core skill the plugin is named after. It strips high-reading-load syntax out of AI-written Japanese and rewrites it into prose you can understand in a single pass.
+
+### What it fixes
+
+It targets **syntax** that is hard to parse even for native Japanese readers (the cause of hard-to-read text is syntax, not difficult vocabulary).
+
+- Double negatives (litotes) / nested negation and conditionals
+- Long pre-nominal modifiers / long subject–predicate distance / overloaded single sentences
+- Chains of the particle「の」/ excessive nominalization and Sino-Japanese compounds
+- Redundant or empty expressions (e.g.「することができます」)
+- Excessive formatting such as overused bold-plus-colon bullet lists
+- Three or more coordinate items buried in one sentence (unfolded into a bullet list)
+- LLM boilerplate phrases (「重要なのは〜」,「掘り下げる」,「多角的」,「〜に他ならない」, etc. — machine-detected with the bundled prh dictionary)
+- AI-flavored formatting and hype words (emoji bullet lists, bold-plus-colon list boilerplate,「革命的」("revolutionary"),「ゲームチェンジャー」("game changer"), etc. — machine-detected with `textlint-rule-preset-ai-writing`)
+- Paragraph-level redundancy (repeated restatements of the same claim, re-summarizing right after a description, parallel facts scattered across paragraphs)
+
+**In scope**: technical articles, READMEs, design documents, internal documentation, explanatory blog prose.
+**Out of scope**: code itself, short social-media posts, creative writing such as fiction and poetry, and precision-critical legal / medical / academic texts.
+
+### Architecture (three layers; the Jev layer is optional, since v0.9.0)
+
+```mermaid
+flowchart TD
+    IN([Input: Japanese document]) --> T
+    T["(1) textlint<br/>deterministic layer (npx)"]
+    T -->|Mechanically decidable findings| LLM
+    T -->|"Needs contextual judgment (G/H/A)"| JEV
+    JEV["(2) Jev<br/>fast-decision layer (optional)"]
+    JEV -->|Confident answers settle here| LLM
+    JEV -.->|Uncertain / no key / failure| LLM
+    LLM["(3) LLM<br/>rewrite layer (A–H)"]
+    LLM --> V["Re-run textlint<br/>verify before→after"]
+    V --> OUT([Output: clarified body only])
+```
+
+Layer roles: (1) detects double negatives, sentence length, redundancy, and LLM boilerplate with line/column info and produces RLS (before). (2) bundles the findings that need contextual judgment (G boilerplate substance / H paragraph repetition / A litotes) into one request and answers them instantly as yes/no probabilities. (3) handles the remaining judgments plus the rewrite itself.
+
+- **Detection and scoring belong to textlint (deterministic layer)**; **rewriting belongs to the LLM layer** — unchanged since the first release.
+- The v0.9.0 Jev layer takes over **only the contextual judgments** the LLM used to spend time on.
+  Without a key, layer (2) is skipped entirely and the plugin behaves exactly like the original two layers.
+  For measured speed (roughly 70x) and adoption criteria, see [Jev fast-decision layer](#jev-fast-decision-layer-since-v090) below.
+- No MCP server. textlint runs via `npx`; Jev is called through the bundled `scripts/jev-judge.js`.
+- Full plugin structure maps (component inventory and execution flow) live in `docs/diagrams/`.
+
+### Usage
 
 Just hand the target Japanese text to the skill. Example triggers (in Japanese):
 
@@ -200,6 +165,8 @@ Just hand the target Japanese text to the skill. Example triggers (in Japanese):
 
 By default only the **rewritten body text** is returned. Say「どこを直したか教えて」("tell me what you changed") to get the list of changes as well.
 Say「スコアも出して」("show the score too") to include the reading-load score (before→after).
+
+### Markdown-syntax and mojibake checks (since v0.7.0)
 
 Since v0.7.0, Markdown documents also get a syntax check via markdownlint (run via `npx`).
 Both the before and after versions are linted, so the rewrite is mechanically guaranteed not to
@@ -213,6 +180,124 @@ Also since v0.7.0, mojibake is detected (category I: NFD-decomposed kana, contro
 zero-width spaces, garbled half-width katakana, U+FFFD). These are reported instead of rewritten, and the user decides how
 to handle them — control characters can be intentional, and U+FFFD marks a character whose
 original is lost, so guessing a replacement would fabricate meaning.
+
+### Jev fast-decision layer (since v0.9.0)
+
+Since v0.9.0, TypeSafe's Jev (a decision-only model that returns typed judgments) can serve as an optional fast-decision layer.
+It activates only when an API key is configured; without one, behavior is exactly as before (fully optional).
+
+**The measured effect is roughly a 70x speedup** (2026-10-11/12, jev-1.13.0): the 8 contextual judgments meiseki makes during a rewrite come back in about 250ms from Jev, versus 18 seconds from an LLM.
+
+| Method | Time for 8 contextual judgments |
+|---|---|
+| **Jev, batched (production shape)** | **218-260ms** |
+| Jev, one call per question | 2.0s total |
+| LLM (claude -p, median) | 18.0s |
+
+A batched Jev call costs about the same as a single question, which is why the skill sends all questions in one request.
+On accuracy, adopting only confident answers (p >= 0.8 / p <= 0.2) produced **zero wrong adoptions** in the measurements; uncertain judgments still go to the LLM as before.
+
+On 2026-10-12 we expanded the judgment set to 20 questions and re-measured. A single batched call still took 276-325ms (the LLM took 23-24 seconds — about 77x by medians), and adoption-band judgments were wrong 0 times out of 36 across 3 runs. The LLM side varies between 9 and 24 seconds day to day, so the honest reading of the gap is a 30-70x range. Raw data lives in `experiments/jev-benchmark/`.
+
+It is used in two places: meiseki's pre-rewrite contextual judgments (the 8 questions in the table above), and yorisoi's document-level N1-N5 scoring in assessment mode. The yorisoi side is also measured: it ordered all 3 before/after pairs correctly at an average of 387ms per document (the same scoring via an LLM took a median of 20.7s — roughly 9x). That mode sends the near-full text, though, so it runs only on explicit request even with a key (the default is the jReadability band label).
+
+- Four ways to configure the key; no special tooling is required, and the key file is the standard choice
+  1. `npm run jev:setup` (standard, simplest): run it and paste the key. It is saved to `~/.config/meiseki/jev.key` (mode 0600, never echoed). **If you use 1Password, paste a secret reference (`op://Vault/Item/credential`) instead of the key**; only the retrieval command is saved to `~/.config/meiseki/jev.cmd`, and the key itself never touches disk (it is fetched from 1Password on every use)
+  2. Claude Code settings (same style as MCP server keys): add `"TYPESAFE_API_KEY": "..."` to `"env"` in `~/.claude/settings.json`, and it propagates to the skill's execution environment
+  3. Environment variable: set `TYPESAFE_API_KEY` in your shell (checked first; suited to CI)
+  4. Key command: an optional style for secret-manager users (such as 1Password). Put `export TYPESAFE_JEV_KEY_CMD='op read "op://Private/TypeSafe Jev/credential"'` in your shell profile; only the retrieval command string is stored, and the key itself never touches disk
+  - Results from key commands and `op://` references are cached for 1 hour in the OS secure store (macOS Keychain / Linux libsecret / Windows DPAPI), so 1Password asks for approval once per hour instead of per call. The cache is encrypted storage — no plaintext files — and expired entries are deleted the next time the Jev layer runs, regardless of how the key is resolved. Tune with `TYPESAFE_JEV_KEY_TTL` (seconds), disable with `0`, purge with `node scripts/jev-judge.js --clear-cache`. Environments without a secure store (headless Linux, etc.) skip caching and fetch every time
+  - On plaintext: pasting the key directly ((1) with a raw key, (2), (3)) keeps it in plaintext inside user-owned config files (protected by permissions). To keep key material off disk entirely, use the `op://` reference in (1) or option (4)
+  - From inside a Claude Code session, just ask "set up the Jev key" and the skill resolves the right command for you (including the install path when running as a marketplace plugin); with the `!` terminal prefix, the key is never echoed and never lands in the conversation log
+  - If you installed via the marketplace (`claude plugin install`), you can set it up without cloning the repository:
+
+    ```bash
+    MEISEKI_DIR=$(ls -d ~/.claude/plugins/cache/bamboo-nova-ja-tools/meiseki/* | sort -V | tail -1)
+    node "$MEISEKI_DIR/scripts/jev-judge.js" --setup
+    ```
+
+  - Keys are stored under `~/.config/meiseki/`, independent of where the plugin lives, so updating or reinstalling the plugin never loses your key setup
+  - Whichever you choose, verify with `npm run jev:check`. Without a key, the Jev layer is skipped automatically and everything works as before
+- The auto-apply hook never uses Jev (it stays fully offline)
+
+On data transmission and privacy: enabling Jev sends the text under judgment to TypeSafe's servers. meiseki sends only excerpts of the flagged sentences/paragraphs plus the questions. yorisoi's document-level estimate would send the first 48,000 characters of the document (effectively the whole thing), so **it stays disabled by default even with a key configured** — the skill asks for your consent first and runs it only when you agree (ask-by-default opt-in). TypeSafe states it does not train on customer data, but **standard accounts are not ZDR (zero data retention)** — requests may be kept for some period for operations, abuse prevention, or debugging (ZDR is enterprise-only; see [TypeSafe's legal docs](https://docs.typesafe.ai/legal)).
+
+For documents that must not leave your machine, disable Jev with any of the following. Each is a complete fallback to the previous behavior; no functionality is lost.
+
+- Put a `.meiseki-no-jev` file (empty is fine) at the project root. Ancestor directories are scanned, so this reliably stops transmission for the whole repository
+- Write a per-scope policy in the project's `.meiseki.json`, e.g. `{"jev": {"meiseki": "ask", "yorisoi": "deny"}}`. `deny` always blocks; `ask` makes the skill confirm with you each time before running (defaults: meiseki=allow, yorisoi=ask)
+- Set the environment variable `MEISEKI_JEV_DISABLE=1` (per session / CI)
+- Simply do not configure a key (the default state)
+- The dataset, reproduction steps, and raw results behind these numbers live in `experiments/jev-benchmark/` (re-measure any time with `npm run bench:jev`)
+
+On hosts other than Claude Code (Codex CLI, Devin, etc.) and in CI: key configuration (key file, environment variable, key command), the `.meiseki.json` policy, and the `.meiseki-no-jev` marker are all read directly by the bundled Node scripts, so **they work identically on every host**. Only the `ask` confirmation depends on the host's interaction facility — AskUserQuestion on Claude Code, `request_user_input` or a text question on Codex. Where no confirmation is possible (CI, autonomous runs), `ask` can never receive consent and therefore **behaves like deny** (fails safe).
+
+### Rule rationale for `references/textlint.config.json` (the key differentiator)
+
+The full presets also enforce rules **unrelated to reading load** — orthographic variants, exclamation marks, katakana long vowels — and "over-polish" the text.
+meiseki keeps **only the rules that affect reading load** and turns everything else off with `false`.
+
+| Enabled (true) | Role |
+|---|---|
+| `no-double-negative-ja` | Double negatives (top-priority category A) |
+| `sentence-length` (max 90) | Sentence length (B) |
+| `max-ten` (max 3) | Excessive commas (B) |
+| `max-kanji-continuous-len` (max 6) | Long kanji runs = heavy Sino-Japanese compounds (C) |
+| `ja-no-redundant-expression` | Redundant expressions such as「することができる」(C/D) |
+| `no-doubled-joshi` (min_interval 1) | Repeated particles (B) |
+| `no-doubled-conjunction` | Repeated conjunctions (D) |
+| `no-doubled-conjunctive-particle-ga` | Consecutive adversative「が」= a sign of overloading (B) |
+| `ja-no-weak-phrase` | Weak phrases (D — never used to strengthen a stance) |
+| `prh` (bundled dictionary `prh-llm-phrases.yml`) | LLM boilerplate (G). **Detection only** — the LLM decides in context whether to cut or keep. Also detects, via the A1 supplement section, separated / polite-form double negatives that `no-double-negative-ja` misses (e.g.「〜ないとは言えません」) |
+| `preset-ai-writing/no-ai-list-formatting` | Emoji bullets, bold-plus-colon list boilerplate (E) |
+| `preset-ai-writing/no-ai-emphasis-patterns` | Excessive bold inside lists (E) |
+| `preset-ai-writing/no-ai-hype-expressions` | Hype words such as「革命的」(G). Detection only, like prh; the LLM judges context |
+| `preset-ai-writing/ai-tech-writing-guideline` | Conciseness findings such as redundant auxiliaries and vague phrasing (D). Enabled explicitly because its default severity is info |
+
+Rules disabled (false):
+
+- `arabic-kanji-numbers`, `no-mix-dearu-desumasu`, `ja-no-mixed-period`
+- `no-dropping-the-ra`, `no-exclamation-question-mark`, `no-nfd`
+
+> **Note on preset tracking**: changing the pinned versions of the `textlint` package or
+> `textlint-rule-preset-ja-technical-writing` may change that preset's rule keys and defaults.
+> When updating, check the preset's README for the rule list and verify the keys above still exist
+> and match. If new bundled rules unrelated to reading load appear, turn them off with `false` likewise.
+
+### Reading Load Score (RLS)
+
+```
+RLS = Σ(findings per category × weight) ÷ number of sentences in the body × 100   (lower is easier to read)
+```
+
+| Category | textlint rules | Weight |
+|---|---|---|
+| A Nested negation (top priority) | `no-double-negative-ja` | 3 |
+| B Distance / length | `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga` | 2 |
+| C Sino-Japanese compounds / nominalization | `max-kanji-continuous-len`, `ja-no-redundant-expression` | 2 |
+| D Redundant / empty | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`, `ai-tech-writing-guideline` | 1 |
+| E Formatting | `no-ai-list-formatting`, `no-ai-emphasis-patterns` (+ LLM judgment) | 1 |
+| F Structuring (enumeration) | (LLM judgment) | 1 |
+| G Boilerplate | `prh` (bundled dictionary), `no-ai-hype-expressions` | 1 |
+| H Paragraph redundancy | (LLM judgment) | 1 |
+
+**Acceptance criteria: after < before is mandatory; category A (double negatives) must in principle be 0.** Intentional litotes is the only exception.
+
+### Acceptance checklist
+
+- [ ] Output is body text only (no analysis, headings, or commentary attached)
+- [ ] Opening generalities (「近年〜」"In recent years...") are removed
+- [ ] 「することができます」has become「できます」
+- [ ] 「〜の〜の〜」chains are untangled
+- [ ] Long pre-nominal modifiers are split; subject and predicate are close together
+- [ ] **Double negatives are folded without flipping the logic** (e.g.「招かないとは言えません」→「負荷が増えることがある」"the load can increase";「増えない」"does not increase" is a mistranslation = fail)
+- [ ] The polite/plain style (敬体／常体) is preserved
+- [ ] API names, proper nouns, and numbers are unchanged
+- [ ] Sentences that were already plain are not rewritten needlessly
+- [ ] **No voice or stance has been injected** (no added first-person opinions like「自分は」, no added assertive emphasis)
+- [ ] LLM boilerplate (「重要なのは〜」,「掘り下げる」, etc.) is removed (usages with real substance in context are kept)
+- [ ] Paragraph-level restatements and re-summaries are removed (claims, examples, evidence, and exceptions are not lost)
+- [ ] Re-running textlint shows the reading-load score is lower than before (category A is 0)
 
 ## Plain Japanese skill `meiseki:yorisoi` (since v0.6.0)
 
@@ -312,6 +397,14 @@ IPAexGothic is the preferred Japanese font; if it is missing, a font already on 
 
 See `examples/rikai/` for a source document, learning history, explainers, writer feedback report, and reproduction steps.
 
+## PDF conversion skill `meiseki:jp-pdf` (since v0.8.0)
+
+The fourth skill: converts Japanese Markdown into styled offline PDFs. The pipeline is pandoc → xelatex only — no Chrome, no external services. rikai's textbook output also goes through this skill.
+
+- Trigger examples: "turn this Markdown into a PDF", "generate a Japanese PDF"
+- Prefers IPAexGothic and supports embedded SVG figures, colored headings, callout quotes, and striped tables
+- See `.agents/skills/jp-pdf/SKILL.md` for prerequisites (pandoc, xelatex, librsvg) and detailed usage
+
 ## Auto-apply hook (when used as a plugin)
 
 When enabled as a plugin, **a check runs automatically every time Claude Writes / Edits a Japanese Markdown file**.
@@ -372,72 +465,64 @@ Claude Writes / Edits report.md
 > If installed only as an Agent Skill (`npx skills add`), no hook is attached; the skill
 > fires only when you ask, as before.
 
-## Rule rationale for `references/textlint.config.json` (the key differentiator)
-
-The full presets also enforce rules **unrelated to reading load** — orthographic variants, exclamation marks, katakana long vowels — and "over-polish" the text.
-meiseki keeps **only the rules that affect reading load** and turns everything else off with `false`.
-
-| Enabled (true) | Role |
-|---|---|
-| `no-double-negative-ja` | Double negatives (top-priority category A) |
-| `sentence-length` (max 90) | Sentence length (B) |
-| `max-ten` (max 3) | Excessive commas (B) |
-| `max-kanji-continuous-len` (max 6) | Long kanji runs = heavy Sino-Japanese compounds (C) |
-| `ja-no-redundant-expression` | Redundant expressions such as「することができる」(C/D) |
-| `no-doubled-joshi` (min_interval 1) | Repeated particles (B) |
-| `no-doubled-conjunction` | Repeated conjunctions (D) |
-| `no-doubled-conjunctive-particle-ga` | Consecutive adversative「が」= a sign of overloading (B) |
-| `ja-no-weak-phrase` | Weak phrases (D — never used to strengthen a stance) |
-| `prh` (bundled dictionary `prh-llm-phrases.yml`) | LLM boilerplate (G). **Detection only** — the LLM decides in context whether to cut or keep. Also detects, via the A1 supplement section, separated / polite-form double negatives that `no-double-negative-ja` misses (e.g.「〜ないとは言えません」) |
-| `preset-ai-writing/no-ai-list-formatting` | Emoji bullets, bold-plus-colon list boilerplate (E) |
-| `preset-ai-writing/no-ai-emphasis-patterns` | Excessive bold inside lists (E) |
-| `preset-ai-writing/no-ai-hype-expressions` | Hype words such as「革命的」(G). Detection only, like prh; the LLM judges context |
-| `preset-ai-writing/ai-tech-writing-guideline` | Conciseness findings such as redundant auxiliaries and vague phrasing (D). Enabled explicitly because its default severity is info |
-
-Rules disabled (false):
-
-- `arabic-kanji-numbers`, `no-mix-dearu-desumasu`, `ja-no-mixed-period`
-- `no-dropping-the-ra`, `no-exclamation-question-mark`, `no-nfd`
-
-> **Note on preset tracking**: changing the pinned versions of the `textlint` package or
-> `textlint-rule-preset-ja-technical-writing` may change that preset's rule keys and defaults.
-> When updating, check the preset's README for the rule list and verify the keys above still exist
-> and match. If new bundled rules unrelated to reading load appear, turn them off with `false` likewise.
-
-## Reading Load Score (RLS)
+## Directory layout
 
 ```
-RLS = Σ(findings per category × weight) ÷ number of sentences in the body × 100   (lower is easier to read)
+meiseki/
+├── .claude-plugin/          # Claude Code plugin manifest
+├── .codex-plugin/           # Codex CLI plugin manifest
+├── hooks/
+│   ├── hooks.json           # PostToolUse hook definition for Claude Code
+│   └── codex-hooks.json     # PostToolUse hook definition for Codex CLI
+├── scripts/
+│   ├── meiseki-lint-core.sh     # Deterministic-layer core: masking + textlint + threshold check (rule set swappable via env vars)
+│   ├── meiseki-check.sh         # Claude Code adapter: JSON I/O and re-run guard
+│   ├── codex-hook.sh            # Codex adapter: extracts paths from the apply_patch envelope and bridges
+│   ├── yorisoi-vocab-check.js  # Wrapper for the vocabulary-level checker (core ships inside the skill)
+│   ├── jev-judge.js             # Jev decision client (key resolution, fallback, --setup/--check)
+│   ├── bench-jev.js             # Jev speed/agreement benchmark (npm run bench:jev)
+│   ├── test-meiseki-check.sh    # Automated tests for the hook, prh dictionary, and Jev fallback (npm run test:hook)
+│   └── test-yorisoi.sh         # Automated tests for yorisoi detection and vocabulary checks (npm run test:yorisoi)
+├── .agents/skills/          # Standard Agent Skills location (shared by Claude Code and Codex)
+│   ├── meiseki/
+│   │   ├── SKILL.md         # LLM orchestrator for the clarity skill
+│   │   └── references/
+│   │       ├── patterns.md             # High-load syntax catalog A–H
+│   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
+│   │       ├── textlint.config.json    # textlint config narrowed to rules that affect reading load
+│   │       └── markdownlint.config.jsonc # Minimal rule set for the Markdown-syntax regression guard
+│   ├── yorisoi/
+│   │   ├── SKILL.md         # LLM orchestrator for the plain-Japanese skill
+│   │   ├── scripts/vocab-check.js      # Vocabulary-level checker (morphological analysis + bundled lists)
+│   │   └── references/
+│   │       ├── patterns-yorisoi.md    # Guideline-derived rewrite catalog YA–YH
+│   │       ├── prh-yorisoi.yml        # Detection dictionary: passive, speculation, honorifics, notation
+│   │       ├── textlint-yorisoi.config.json
+│   │       └── vocab/                  # Vocabulary lists (sources and licenses in its README)
+│   ├── rikai/
+│   │   ├── SKILL.md         # LLM orchestrator for the comprehension-check skill
+│   │   ├── references/
+│   │   │   ├── question-design.md     # Rules for multiple-choice and fresh-angle review questions
+│   │   │   ├── study-format.md        # Storage format for learning history and the writer feedback report
+│   │   │   ├── quiz-format.md         # Format of quiz data, answers, and answer codes
+│   │   │   ├── explainer-html.md      # How to write the picture notebook
+│   │   │   └── explainer-textbook.md  # How to write the textbook
+│   │   ├── assets/          # Templates for the quiz form and picture notebook, LaTeX style for the textbook
+│   │   └── scripts/         # build_quiz.py / quiz_server.py / build_textbook.py (Python standard library only)
+│   └── jp-pdf/              # Japanese Markdown -> styled PDF (pandoc/xelatex)
+│       ├── SKILL.md
+│       ├── scripts/         # build_pdf.py / svglib.py
+│       └── assets/style.tex
+├── experiments/
+│   └── jev-benchmark/           # Jev benchmark dataset, reproduction steps, and raw measurements
+├── examples/
+│   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
+│   ├── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
+│   ├── rikai/              # Example source, learning history, and explainers (picture notebook and textbook)
+│   └── markdownlint/        # Markdown-syntax check examples (samples firing all 13 rules)
+├── package.json             # Provides npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* for development
+└── README.md
 ```
-
-| Category | textlint rules | Weight |
-|---|---|---|
-| A Nested negation (top priority) | `no-double-negative-ja` | 3 |
-| B Distance / length | `sentence-length`, `max-ten`, `no-doubled-conjunctive-particle-ga` | 2 |
-| C Sino-Japanese compounds / nominalization | `max-kanji-continuous-len`, `ja-no-redundant-expression` | 2 |
-| D Redundant / empty | `ja-no-redundant-expression`, `no-doubled-conjunction`, `ja-no-weak-phrase`, `ai-tech-writing-guideline` | 1 |
-| E Formatting | `no-ai-list-formatting`, `no-ai-emphasis-patterns` (+ LLM judgment) | 1 |
-| F Structuring (enumeration) | (LLM judgment) | 1 |
-| G Boilerplate | `prh` (bundled dictionary), `no-ai-hype-expressions` | 1 |
-| H Paragraph redundancy | (LLM judgment) | 1 |
-
-**Acceptance criteria: after < before is mandatory; category A (double negatives) must in principle be 0.** Intentional litotes is the only exception.
-
-## Acceptance checklist
-
-- [ ] Output is body text only (no analysis, headings, or commentary attached)
-- [ ] Opening generalities (「近年〜」"In recent years...") are removed
-- [ ] 「することができます」has become「できます」
-- [ ] 「〜の〜の〜」chains are untangled
-- [ ] Long pre-nominal modifiers are split; subject and predicate are close together
-- [ ] **Double negatives are folded without flipping the logic** (e.g.「招かないとは言えません」→「負荷が増えることがある」"the load can increase";「増えない」"does not increase" is a mistranslation = fail)
-- [ ] The polite/plain style (敬体／常体) is preserved
-- [ ] API names, proper nouns, and numbers are unchanged
-- [ ] Sentences that were already plain are not rewritten needlessly
-- [ ] **No voice or stance has been injected** (no added first-person opinions like「自分は」, no added assertive emphasis)
-- [ ] LLM boilerplate (「重要なのは〜」,「掘り下げる」, etc.) is removed (usages with real substance in context are kept)
-- [ ] Paragraph-level restatements and re-summaries are removed (claims, examples, evidence, and exceptions are not lost)
-- [ ] Re-running textlint shows the reading-load score is lower than before (category A is 0)
 
 ## References
 
@@ -462,6 +547,7 @@ The yorisoi skill draws on the following resources:
 - The yorisoi skill's vocabulary-level labels ("roughly N4" etc.) are **estimates based on unofficial lists** and do not match any official JLPT standard.
 - The yorisoi skill follows the official guidelines but is **not an approved or certified tool**. Simplification can alter meaning. Before publishing rewritten output as official information (administrative procedures, disaster notices, etc.), **have it reviewed by qualified staff** (Japanese-language education or multicultural affairs officers).
 - The author and rights holders accept no liability for any direct or indirect damages arising from the use of, or inability to use, this Agent Skill and plugin (see `LICENSE` for details).
+- Enabling the optional Jev fast-decision layer (since v0.9.0) transmits the text under judgment to TypeSafe's servers (excerpts of flagged passages for meiseki; for yorisoi's document-level estimate, the first 48,000 characters — and that path runs only on explicit request). TypeSafe states it does not train on customer data, but standard accounts are not ZDR and requests may be retained for operational purposes. **For documents containing confidential information, disable Jev (e.g. with a `.meiseki-no-jev` marker) before use.** Handling of transmitted data is governed by TypeSafe's terms; the author accepts no responsibility for it.
 - This Agent Skill and plugin depend on third-party OSS such as textlint. The behavior and security of those dependencies are governed by their respective providers' terms and licenses.
 
 ## Acknowledgments

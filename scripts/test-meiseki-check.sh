@@ -88,6 +88,11 @@ assert_eq "良文 md の 2 回目はリプレイで素通り" "" "$(hook "$TESTD
 printf 'This is an English-only document.\n' > "$TESTDIR/english.md"
 assert_eq "英語 md は素通り" "" "$(hook "$TESTDIR/english.md")"
 
+# en-dash(–)・矢印(→)などの記号は、ロケール照合の誤マッチで日本語扱いに
+# なりやすい。記号入りの英語 md も素通りすることを担保する
+printf 'Latency improved 218–260ms — see uninstall → install flow.\n' > "$TESTDIR/english-dash.md"
+assert_eq "記号(– — →)入りの英語 md も素通り" "" "$(hook "$TESTDIR/english-dash.md")"
+
 cp "$TESTDIR/sep-dn.md" "$TESTDIR/CLAUDE.md"
 assert_eq "除外パス(CLAUDE.md)は素通り" "" "$(hook "$TESTDIR/CLAUDE.md")"
 
@@ -244,6 +249,110 @@ assert_eq "1KB 超の正当な UTF-8 は exit 4 にならない" "false" "$([ "$
 OUTS=$(hook "$TESTDIR/sjis.md")
 assert_eq "SJIS ファイルは block しない" "none" "$(printf '%s' "$OUTS" | jq -r '.decision // "none"')"
 assert_eq "SJIS ファイルはエンコーディング警告を出す" "true" "$(printf '%s' "$OUTS" | jq -r '.hookSpecificOutput.additionalContext | contains("UTF-8 として読めません")')"
+
+echo ""
+echo "Part 4: Jev 判定層(jev-judge.js) — キーなしはスキップ、失敗はフォールバック"
+
+# キー未設定 → exit 3(呼び出し側は Jev 層をスキップして従来動作)
+NOKEY_HOME=$(mktemp -d "${TMPDIR:-/tmp}/jevhome.XXXXXX")
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | env -u TYPESAFE_API_KEY HOME="$NOKEY_HOME" node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "キー未設定で exit 3" "3" "$?"
+env -u TYPESAFE_API_KEY HOME="$NOKEY_HOME" node scripts/jev-judge.js --check >/dev/null 2>&1
+assert_eq "--check もキー未設定で exit 3" "3" "$?"
+rm -rf "$NOKEY_HOME"
+
+# 接続不能エンドポイント → exit 2(呼び出し側はフォールバック)
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | TYPESAFE_API_KEY=dummy TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=2000 \
+    node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "接続不能エンドポイントで exit 2" "2" "$?"
+
+# 不正な stdin → exit 2
+printf 'not-json' | TYPESAFE_API_KEY=dummy node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "不正 JSON 入力で exit 2" "2" "$?"
+
+# キーコマンド(1Password 等): 成功すればキーとして解決、失敗は未設定扱い
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | env -u TYPESAFE_API_KEY TYPESAFE_JEV_KEY_TTL=0 TYPESAFE_JEV_KEY_CMD='echo k' \
+    TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=2000 \
+    node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "キーコマンド成功時はキー解決(API 失敗で exit 2)" "2" "$?"
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | env -u TYPESAFE_API_KEY TYPESAFE_JEV_KEY_TTL=0 TYPESAFE_JEV_KEY_CMD='false' node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "キーコマンド失敗時は exit 3(未設定扱い)" "3" "$?"
+
+# データ送信のディレクトリ単位ブロック: .meiseki-no-jev が祖先にあれば送信せず exit 3
+NOJEV=$(mktemp -d "${TMPDIR:-/tmp}/nojev.XXXXXX"); touch "$NOJEV/.meiseki-no-jev"; mkdir -p "$NOJEV/sub"
+( cd "$NOJEV/sub" && printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | TYPESAFE_API_KEY=dummy node "$ROOT/scripts/jev-judge.js" >/dev/null 2>&1 )
+assert_eq ".meiseki-no-jev が祖先にあればキーがあっても exit 3" "3" "$?"
+rm -rf "$NOJEV"
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | MEISEKI_JEV_DISABLE=1 TYPESAFE_API_KEY=dummy node scripts/jev-judge.js >/dev/null 2>&1
+assert_eq "MEISEKI_JEV_DISABLE=1 で exit 3" "3" "$?"
+
+# ポリシー: .meiseki.json の deny / 既定 ask(yorisoi) / --consented
+POLDIR=$(mktemp -d "${TMPDIR:-/tmp}/jevpol.XXXXXX")
+printf '{"jev": {"meiseki": "deny"}}' > "$POLDIR/.meiseki.json"
+( cd "$POLDIR" && printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | TYPESAFE_API_KEY=dummy node "$ROOT/scripts/jev-judge.js" --scope meiseki >/dev/null 2>&1 )
+assert_eq ".meiseki.json の deny で exit 3" "3" "$?"
+rm -rf "$POLDIR"
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | TYPESAFE_API_KEY=dummy node scripts/jev-judge.js --scope yorisoi >/dev/null 2>&1
+assert_eq "yorisoi は既定 ask のため同意なしで exit 3" "3" "$?"
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | TYPESAFE_API_KEY=dummy TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=2000 \
+    node scripts/jev-judge.js --scope yorisoi --consented >/dev/null 2>&1
+assert_eq "ask + --consented は実行される(API 失敗で exit 2)" "2" "$?"
+
+# キーコマンド結果のセキュアストアキャッシュ(偽 op/security で検証)
+CACHEDIR=$(mktemp -d "${TMPDIR:-/tmp}/jevcache.XXXXXX")
+: > "$CACHEDIR/count"
+printf '#!/bin/sh\necho x >> "%s"; [ "$1" = "read" ] && echo k || exit 1\n' "$CACHEDIR/count" > "$CACHEDIR/op"
+cat > "$CACHEDIR/security" <<EOSEC
+#!/bin/sh
+case "\$1" in
+  find-generic-password) [ -f "$CACHEDIR/store" ] && cat "$CACHEDIR/store" || exit 44 ;;
+  add-generic-password) shift; while [ \$# -gt 1 ]; do [ "\$1" = "-w" ] && printf '%s' "\$2" > "$CACHEDIR/store"; shift; done ;;
+  delete-generic-password) rm -f "$CACHEDIR/store" ;;
+esac
+EOSEC
+chmod +x "$CACHEDIR/op" "$CACHEDIR/security"
+CACHEHOME=$(mktemp -d "${TMPDIR:-/tmp}/jevcachehome.XXXXXX")
+for _ in 1 2 3; do
+  printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+    | env -u TYPESAFE_API_KEY HOME="$CACHEHOME" PATH="$CACHEDIR:$PATH" \
+      TYPESAFE_JEV_KEY_CMD='op read x' \
+      TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=1500 \
+      node scripts/jev-judge.js --scope meiseki >/dev/null 2>&1
+done
+assert_eq "3 回の呼び出しでキーコマンドは 1 回だけ実行される(キャッシュ)" "1" "$(wc -l < "$CACHEDIR/count" | tr -d ' ')"
+: > "$CACHEDIR/count"
+printf '{"state":"x","questions":{"q":{"type":"noul","instructions":"?"}}}' \
+  | env -u TYPESAFE_API_KEY HOME="$CACHEHOME" PATH="$CACHEDIR:$PATH" \
+    TYPESAFE_JEV_KEY_TTL=0 TYPESAFE_JEV_KEY_CMD='op read x' \
+    TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=1500 \
+    node scripts/jev-judge.js --scope meiseki >/dev/null 2>&1
+assert_eq "TTL=0 ではキャッシュを使わず毎回実行する" "1" "$(wc -l < "$CACHEDIR/count" | tr -d ' ')"
+rm -rf "$CACHEDIR" "$CACHEHOME"
+
+# 1Password 参照(op://)の setup: 保存されるのは取得コマンドだけで、キー本体は残らない
+JEVHOME=$(mktemp -d "${TMPDIR:-/tmp}/jevop.XXXXXX")
+FAKEBIN=$(mktemp -d "${TMPDIR:-/tmp}/jevfakebin.XXXXXX")
+printf '#!/bin/sh\n[ "$1" = "read" ] && echo fake-key || exit 1\n' > "$FAKEBIN/op"
+chmod +x "$FAKEBIN/op"
+printf 'op://Vault/Item/credential\n' \
+  | env -u TYPESAFE_API_KEY TYPESAFE_JEV_KEY_TTL=0 HOME="$JEVHOME" PATH="$FAKEBIN:$PATH" \
+    TYPESAFE_JEV_ENDPOINT="http://127.0.0.1:9/nope" TYPESAFE_JEV_TIMEOUT_MS=2000 \
+    node scripts/jev-judge.js --setup >/dev/null 2>&1
+assert_eq "op:// setup は参照を保存しキー取得まで成功(API 失敗で exit 2)" "2" "$?"
+[ -f "$JEVHOME/.config/meiseki/jev.cmd" ] && [ ! -f "$JEVHOME/.config/meiseki/jev.key" ]
+assert_eq "jev.cmd だけが作られ、平文キーファイルは作られない" "0" "$?"
+grep -q 'fake-key' "$JEVHOME/.config/meiseki/jev.cmd" 2>/dev/null
+assert_eq "jev.cmd にキー本体が含まれない" "1" "$?"
+rm -rf "$JEVHOME" "$FAKEBIN"
 
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"

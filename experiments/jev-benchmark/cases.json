@@ -1,0 +1,149 @@
+{
+  "description": "meiseki の文脈判断(G 定型句/H 段落反復/A litotes)の既知正解 20 事例(2026-10-12 に 8→20 へ拡張)。正解の根拠は examples/meiseki と SKILL.md のガードレール。",
+  "adoption_band": {
+    "yes_min": 0.8,
+    "no_max": 0.2
+  },
+  "cases": [
+    {
+      "id": "G-takakuteki-empty",
+      "category": "G",
+      "expect": false,
+      "state": "本稿では多角的な検証を行った。",
+      "instructions": "この文脈で「多角的」は、実際に複数の観点を挙げた実質を持つ語として使われているか。"
+    },
+    {
+      "id": "G-takakuteki-sub",
+      "category": "G",
+      "expect": true,
+      "state": "性能・コスト・保守性の 3 つの観点から比較した結果をまとめ、多角的な評価とした。",
+      "instructions": "この文脈で「多角的」は、実際に複数の観点を挙げた実質を持つ語として使われているか。"
+    },
+    {
+      "id": "H-restate",
+      "category": "H",
+      "expect": true,
+      "state": "段落1: このツールは設定なしで動く。インストール直後から利用できる。\n段落2: つまり、特別な設定をしなくてもすぐに使い始められるということだ。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "H-adds-info",
+      "category": "H",
+      "expect": false,
+      "state": "段落1: このツールは設定なしで動く。\n段落2: ただしプロキシ環境では環境変数の設定が必要になる。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "A-not-litotes",
+      "category": "A",
+      "expect": false,
+      "state": "負荷の増大を招かないとは言えません。",
+      "instructions": "この二重否定は、控えめな肯定の含意(litotes)が本質で、肯定文に畳むと意味が損なわれるか。"
+    },
+    {
+      "id": "A-litotes",
+      "category": "A",
+      "expect": true,
+      "state": "彼の提案も悪くない。むしろ気に入っている。",
+      "instructions": "この「悪くない」は、控えめな肯定の含意(litotes)が本質で、単純な肯定文に畳むとニュアンスが損なわれるか。"
+    },
+    {
+      "id": "G-kakushin-empty",
+      "category": "G",
+      "expect": false,
+      "state": "この革命的なアプローチは開発の常識を覆します。",
+      "instructions": "この文脈で「革命的」は、実測や比較の裏付けを持つ実質的な語として使われているか。"
+    },
+    {
+      "id": "H-clear-keep",
+      "category": "H",
+      "expect": false,
+      "state": "段落1: この設定を省略すると、パフォーマンスに影響することがあります。\n段落2: 影響の大きさは、対象データの件数に比例します。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "G-houkatsu-empty",
+      "category": "G",
+      "expect": false,
+      "state": "本書は包括的な解説を提供する。",
+      "instructions": "この文脈で「包括的」は、実際に扱う範囲を示した実質を持つ語として使われているか。"
+    },
+    {
+      "id": "G-houkatsu-sub",
+      "category": "G",
+      "expect": true,
+      "state": "導入・運用・廃棄の全工程を章立てで扱っており、包括的な構成といえる。",
+      "instructions": "この文脈で「包括的」は、実際に扱う範囲を示した実質を持つ語として使われているか。"
+    },
+    {
+      "id": "G-kakushin-sub",
+      "category": "G",
+      "expect": true,
+      "state": "処理時間を 18 秒から 0.3 秒に短縮した。この劇的な改善で、対話の待ち時間は体感できないレベルになった。",
+      "instructions": "この文脈で「劇的」は、実測や比較の裏付けを持つ実質的な語として使われているか。"
+    },
+    {
+      "id": "G-attouteki-empty",
+      "category": "G",
+      "expect": false,
+      "state": "圧倒的な性能向上を実現します。",
+      "instructions": "この文脈で「圧倒的」は、実測や比較の裏付けを持つ実質的な語として使われているか。"
+    },
+    {
+      "id": "H-resummary",
+      "category": "H",
+      "expect": true,
+      "state": "段落1: このキャッシュは書き込み時に検証を行い、失敗したら警告を出す。\n段落2: まとめると、書き込み時に検証して失敗を警告する仕組みだ。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "H-exception-add",
+      "category": "H",
+      "expect": false,
+      "state": "段落1: この API は毎回同じ結果を返す。\n段落2: ただし入力が 64k トークンを超えた場合だけは、結果が切り詰められる。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "H-example-add",
+      "category": "H",
+      "expect": false,
+      "state": "段落1: 設定ファイルは祖先ディレクトリも探索される。\n段落2: たとえばリポジトリ直下に置けば、サブディレクトリでの作業にも効く。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "H-paraphrase2",
+      "category": "H",
+      "expect": true,
+      "state": "段落1: この手順は管理者権限がなくても実行できる。\n段落2: 言い換えれば、一般ユーザーの権限のままで進められるということである。",
+      "instructions": "段落2は段落1の言い換え反復であり、新しい含意・条件・例外を足していないか。"
+    },
+    {
+      "id": "A-fold-polite",
+      "category": "A",
+      "expect": false,
+      "state": "この機能は旧版でも使えないわけではありません。ただし速度は落ちます。",
+      "instructions": "この二重否定は、控えめな肯定の含意(litotes)が本質で、肯定文に畳むと意味が損なわれるか。"
+    },
+    {
+      "id": "A-fold-kagiranai",
+      "category": "A",
+      "expect": false,
+      "state": "申請が通らないとは限りません。",
+      "instructions": "この二重否定は、控えめな肯定の含意(litotes)が本質で、肯定文に畳むと意味が損なわれるか。"
+    },
+    {
+      "id": "A-fold-hitei",
+      "category": "A",
+      "expect": false,
+      "state": "障害が再発する可能性は否定できません。",
+      "instructions": "この二重否定は、控えめな肯定の含意(litotes)が本質で、肯定文に畳むと意味が損なわれるか。"
+    },
+    {
+      "id": "A-litotes-cheap",
+      "category": "A",
+      "expect": true,
+      "state": "このワインは決して安物ではない。彼はグラスを傾けながら、静かにそう言った。",
+      "instructions": "この否定表現は、控えめな賞賛の含意(litotes)が本質で、単純な肯定文に畳むとニュアンスが損なわれるか。"
+    }
+  ]
+}

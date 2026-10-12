@@ -1,0 +1,56 @@
+{
+  "description": "yorisoi の文書レベル判定(score 型)の検証セット。before はやさしくない原文(N2 以上を期待)、after はガイドライン準拠のやさしい日本語(N3〜N5 を期待)。",
+  "cases": [
+    {
+      "id": "01-before",
+      "file": "examples/yorisoi/01-notice.before.md",
+      "expect_band": [
+        "N1",
+        "N2"
+      ]
+    },
+    {
+      "id": "01-after",
+      "file": "examples/yorisoi/01-notice.after.md",
+      "expect_band": [
+        "N3",
+        "N4",
+        "N5"
+      ]
+    },
+    {
+      "id": "02-before",
+      "file": "examples/yorisoi/02-notation.before.md",
+      "expect_band": [
+        "N1",
+        "N2"
+      ]
+    },
+    {
+      "id": "02-after",
+      "file": "examples/yorisoi/02-notation.after.md",
+      "expect_band": [
+        "N3",
+        "N4",
+        "N5"
+      ]
+    },
+    {
+      "id": "03-before",
+      "file": "examples/yorisoi/03-vocab.before.md",
+      "expect_band": [
+        "N1",
+        "N2"
+      ]
+    },
+    {
+      "id": "03-after",
+      "file": "examples/yorisoi/03-vocab.after.md",
+      "expect_band": [
+        "N3",
+        "N4",
+        "N5"
+      ]
+    }
+  ]
+}

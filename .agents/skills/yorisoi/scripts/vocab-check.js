@@ -34,6 +34,7 @@ const KUROMOJIN_VERSION = '3.0.0';
 
 // ---- 引数 ----
 const args = process.argv.slice(2);
+let typesafeOptIn = process.env.MEISEKI_JEV_YORISOI === '1';
 let level = 'N4';
 let format = 'text';
 let jevPath = null;
@@ -43,11 +44,12 @@ for (let i = 0; i < args.length; i++) {
   if (a === '--level') level = String(args[++i] || '').toUpperCase();
   else if (a === '--format') format = args[++i];
   else if (a === '--jev') jevPath = args[++i];
+  else if (a === '--typesafe-level') typesafeOptIn = true;
   else if (!a.startsWith('-')) file = a;
 }
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 if (!file || !LEVELS.includes(level)) {
-  console.error('usage: vocab-check.js [--level N5..N1] [--format text|json] [--jev jev.csv] <file.md>');
+  console.error('usage: vocab-check.js [--level N5..N1] [--format text|json] [--jev jev.csv] [--typesafe-level] <file.md>');
   process.exit(2);
 }
 const targetIdx = LEVELS.indexOf(level);
@@ -248,12 +250,73 @@ function judge(base, readingHira) {
     jread = Math.round(jread * 100) / 100;
   }
 
+  // jReadability のレベル帯(李・長谷部の公開対応表)を N レベルの目安へ変換する。
+  // 近似値ベースのため、あくまで「相当(推定)」の参考表示。
+  function jreadBand(v) {
+    if (v === null) return null;
+    if (v >= 5.5) return { band: '初級前半', n: 'N5' };
+    if (v >= 4.5) return { band: '初級後半', n: 'N4' };
+    if (v >= 3.5) return { band: '中級前半', n: 'N3' };
+    if (v >= 2.5) return { band: '中級後半', n: 'N2' };
+    if (v >= 1.5) return { band: '上級前半', n: 'N1' };
+    return { band: '上級後半', n: 'N1 超' };
+  }
+  // 文数が少ないと平均文長などが安定せず、近似値が大きく外れる。
+  // 5 文未満の文書では帯表示を出さない(誤解を招くラベルを避ける)。
+  const band = (st.sentences >= 5) ? jreadBand(jread) : null;
+
+  // TypeSafe Jev(decision-only API)が使えるときは、文書全体を score 質問で
+  // N5〜N1 のルーブリックに照らして採点する。使えない・低信頼度のときは
+  // 上の jReadability 近似だけを出す(フォールバック)。
+  // 注意: この "Jev" は TypeSafe のモデル名。JEV 語彙表 CSV(変数 jev)とは別物。
+  async function typesafeLevel(fullText) {
+    const { spawnSync } = require('child_process');
+    const judgePath = path.join(__dirname, '..', '..', '..', '..', 'scripts', 'jev-judge.js');
+    if (!fs.existsSync(judgePath)) return null;
+    const req = JSON.stringify({
+      state: fullText.slice(0, 48000),
+      questions: {
+        doc_level: {
+          type: 'score',
+          instructions: '次の日本語文書を、日本語学習者がどのレベルで読めるかで採点する。語彙の難しさ・文の長さ・文法の複雑さを総合する。',
+          criteria: [
+            'N5: 基本語彙と短い単文だけで書かれ、入門学習者が読める',
+            'N4: 日常語彙と単純な複文で、初級修了者が読める',
+            'N3: 一般的な語彙とやや複雑な文で、中級学習者が読める',
+            'N2: 抽象語・漢語が多く、上級手前の学習者でないと読めない',
+            'N1: 専門語・複雑な構文を含み、上級学習者でないと読めない',
+          ],
+        },
+      },
+    });
+    const r = spawnSync('node', [judgePath, '--scope', 'yorisoi', '--consented'], { input: req, encoding: 'utf8', timeout: 15000 });
+    if (r.status !== 0 || !r.stdout) return null; // 3=キーなし / 2=失敗 → フォールバック
+    try {
+      const body = JSON.parse(r.stdout);
+      const ans = body.answers && body.answers.doc_level;
+      if (!ans) return null;
+      // score はルーブリック配列の位置(0 始まり・小数あり)で返る。N ラベルへ換算する。
+      const JEV_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+      const raw = Number(ans.score);
+      const label = Number.isFinite(raw) ? JEV_LEVELS[Math.min(4, Math.max(0, Math.round(raw)))] : String(ans.score);
+      return { score: label, raw, probabilities: ans.probabilities || null, confidence: ans.confidence ?? null, elapsed_ms: body._meta ? body._meta.elapsed_ms : null };
+    } catch (_) { return null; }
+  }
+  // yorisoi の Jev 判定は文書の先頭 48,000 文字を外部送信するため、キーがあっても
+  // 既定では実行しない。--typesafe-level か MEISEKI_JEV_YORISOI=1 の明示オプトイン時のみ呼ぶ。
+  const tsLevel = typesafeOptIn ? await typesafeLevel(text) : null;
+  const tsUsable = tsLevel && (tsLevel.confidence === null || tsLevel.confidence >= 0.7);
+  const tsSkippedNote = !typesafeOptIn ? 'optin-required' : null;
+
   if (format === 'json') {
     console.log(JSON.stringify({
       file, level, jev: !!jev,
       over: over.map(([base, v]) => ({ word: base, label: v.label, lines: [...new Set(v.lines)] })),
       unknown: unknown.map(([base, v]) => ({ word: base, label: v.label, lines: [...new Set(v.lines)] })),
       jreadability_approx: jread,
+      doc_level: tsUsable
+        ? { method: 'jev(typesafe)', level: tsLevel.score, probabilities: tsLevel.probabilities, confidence: tsLevel.confidence, elapsed_ms: tsLevel.elapsed_ms }
+        : (band ? { method: 'jreadability-approx', level: `${band.n} 相当(推定)`, band: band.band, typesafe_skipped: tsSkippedNote } : null),
     }, null, 2));
   } else {
     console.log(`vocab-check: 目標 ${level} / JEV ${jev ? 'あり' : 'なし(同梱リストのみ)'}`);
@@ -262,6 +325,14 @@ function judge(base, readingHira) {
     console.log(`リスト外(参考): ${unknown.length} 語`);
     for (const e of unknown) console.log('  ' + fmt(e));
     if (jread !== null) console.log(`jReadability 近似値(参考・高いほど易しい): ${jread}`);
+    if (tsUsable) {
+      console.log(`文書全体レベル(Jev): ${tsLevel.score} 相当(信頼度 ${tsLevel.confidence ?? '—'}${tsLevel.elapsed_ms ? `, ${tsLevel.elapsed_ms}ms` : ''})`);
+    } else if (band) {
+      console.log(`文書全体レベル(jReadability 近似・参考): ${band.band} ≒ ${band.n} 相当(語種を表層から推定しているため、実際より難しめに出る傾向があります)`);
+      if (tsSkippedNote) {
+        console.log('(Jev による採点は未実行です。文書の先頭 48,000 字を外部送信するため、--typesafe-level の明示指定時だけ動きます)');
+      }
+    }
   }
   process.exit(over.length > 0 ? 1 : 0);
 })().catch((e) => { console.error('vocab-check: エラー:', e.message); process.exit(2); });

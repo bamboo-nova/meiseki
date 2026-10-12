@@ -1,0 +1,21 @@
+yorisoi score 検証・換算修正版(jev-1.13.0・examples/yorisoi 6 文書)
+score は criteria 配列の位置。round(score) を N ラベルへ換算して評価する。
+  01-before: raw=2.22 → N3 (期待帯 N1/N2: 不一致) conf=0.72 325ms
+  01-after: raw=0.81 → N4 (期待帯 N3/N4/N5: 一致) conf=0.74 359ms
+  02-before: raw=1.31 → N4 (期待帯 N1/N2: 不一致) conf=0.7 365ms
+  02-after: raw=1.01 → N4 (期待帯 N3/N4/N5: 一致) conf=0.82 694ms
+  03-before: raw=2.89 → N2 (期待帯 N1/N2: 一致) conf=0.84 240ms
+  03-after: raw=1.06 → N4 (期待帯 N3/N4/N5: 一致) conf=0.76 339ms
+---
+  ペア 01: before(2.22) > after(0.81) → 順序正しい
+  ペア 02: before(1.31) > after(1.01) → 順序正しい
+  ペア 03: before(2.89) > after(1.06) → 順序正しい
+---
+帯一致: 4/6 / ペア順序(before が after より難しい): 3/3
+レイテンシ: 平均 387ms / 最大 694ms
+補足: 期待帯は作問時の仮置き。02-before は表記規則の違反が主で語彙は平易なため、N4 判定はむしろ妥当とも読める。
+
+LLM ベースライン(claude -p・同じ 6 文書を 1 プロンプトで採点・CLI 起動込み):
+run1: 20663ms / run2: 16427ms / run3: 25095ms(中央値 20.7 秒)
+帯一致 6/6(doc3 が 1 回だけ N3 に揺れ)・ペア順序 3/3。
+比較: Jev は 6 文書を直列でも合計約 2.3 秒(平均 387ms/文書)= LLM 比で約 9 倍。

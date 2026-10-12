@@ -61,8 +61,11 @@ if command -v iconv >/dev/null 2>&1; then
   [ "${PIPESTATUS[0]}" = "0" ] || exit 4
 fi
 
-# 日本語(ひらがな・カタカナ・漢字)を含まないファイルは対象外
-grep -q '[ぁ-んァ-ヶ一-龯]' "$FILE" 2>/dev/null || exit 3
+# 日本語(ひらがな・カタカナ・漢字)を含まないファイルは対象外。
+# grep のブラケット範囲はロケール照合の影響で en-dash(–)や矢印(→)等に
+# 誤マッチすることがあるため、Unicode スクリプト指定の perl で判定する。
+has_japanese() { perl -CSD -ne '$f = 1, last if /[\p{Hiragana}\p{Katakana}\p{Han}]/; END { exit($f ? 0 : 1) }' "$1" 2>/dev/null; }
+has_japanese "$FILE" || exit 3
 
 CORE_DIR=$(cd "$(dirname "$0")" && pwd)
 CONFIG="${MEISEKI_LINT_CONFIG:-$CORE_DIR/../.agents/skills/meiseki/references/textlint.config.json}"
@@ -144,7 +147,7 @@ BEGIN {
 fi
 
 # マスク後に日本語が残らなければ本文に検査対象がない
-grep -q '[ぁ-んァ-ヶ一-龯]' "$MASKED_MD" 2>/dev/null || exit 3
+has_japanese "$MASKED_MD" || exit 3
 
 # SKILL.md Step 2 と同一のピン止めバージョンで textlint を実行(指摘ありだと exit 1)
 NPX_PKG_ARGS=""

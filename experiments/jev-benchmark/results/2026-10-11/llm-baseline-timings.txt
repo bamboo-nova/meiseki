@@ -1,0 +1,6 @@
+LLM ベースライン(claude -p、llm-baseline-prompt.txt を使用、CLI 起動込みの実時間):
+run1: 14840ms
+run2: 18030ms
+run3: 21097ms
+中央値: 18030ms
+回答は 3 回とも同一(llm-baseline-run*.json)で、期待値と 8/8 一致。

@@ -28,6 +28,7 @@ explainer は役割の違う 2 冊である。絵解きノート（HTML）は大
 | 出題データ・回答・回答コード | [references/quiz-format.md](references/quiz-format.md) |
 | 絵解きノート | [references/explainer-html.md](references/explainer-html.md) |
 | テキストブック | [references/explainer-textbook.md](references/explainer-textbook.md) |
+| ダッシュボード（フォルダ全体の進捗一覧） | [references/dashboard.md](references/dashboard.md) |
 
 ## 3. 対象 / 対象外
 
@@ -46,6 +47,8 @@ explainer は役割の違う 2 冊である。絵解きノート（HTML）は大
 |---|---|---|---|
 | `docs/report.md` | `docs/.rikai/report.study.md` | `docs/.rikai/report.explainer.html` | `docs/.rikai/report.explainer.tex` と `.pdf` |
 | `docs/report.pdf` | `docs/.rikai/report.pdf.study.md` | `docs/.rikai/report.pdf.explainer.html` | `docs/.rikai/report.pdf.explainer.tex` と `.pdf` |
+
+`.rikai/dashboard.html` は、そのフォルダにある全資料の進捗一覧で、資料ごとには作らない（[references/dashboard.md](references/dashboard.md)）。
 
 次の順に確かめる。
 
@@ -145,14 +148,31 @@ python3 "<SKILL_DIR>/scripts/build_textbook.py" --input "<原稿>" --output "<PD
 
 `python3` がない環境では、`build_textbook.py` を実行できない（`--escape` も使えない）。原稿は更新して残し、PDF を省いたことを 1 行で伝える（xelatex がないときと同じ）。資料名や論点の題名に含まれる特殊文字は、[references/explainer-textbook.md](references/explainer-textbook.md) §4 の表に従って手でエスケープする。
 
+最後に、その資料がある `.rikai/` のダッシュボードを再生成する（[references/dashboard.md](references/dashboard.md)）。出題がなかったセッションでも行う。`--lang` にはユーザーの言語の言語タグを渡す。
+
+```bash
+python3 "<SKILL_DIR>/scripts/build_dashboard.py" --rikai-dir "<.rikai フォルダ>" --lang "<言語タグ>"
+```
+
+終了コード 2 は、同じフォルダに読めない study.md があることを示す。ダッシュボードは書かれているので先へ進み、Step 7 で資料名と理由を伝える。`python3` がない環境では再生成できないので、省いたことを 1 行で伝える。
+
 ### Step 7. 報告する
 
 次を伝えて終える。
 
 - 絵解きノートとテキストブックのパス
+- ダッシュボードのパス（読めない study.md があれば、その資料名と理由）
 - 次回の復習対象になる論点の題名
 - PDF を省いた場合は、その理由
 - 以前の方式の PDF（`<資料名>.study.pdf`）が残っていれば、もう更新していないことを伝え、削除してよいかを尋ねる
+
+### 出題を伴わない依頼
+
+次の依頼は、問題を作らずに応じる。どちらも Step 1 の確認（旧配置の移動と形式の移行）は行う。
+
+- **進捗を見たい**（「進捗を見せて」「ダッシュボードを開いて」など）: Step 6 の末尾と同じコマンドでダッシュボードを再生成し、パスを伝える。フォルダをまたいだ一覧を求められたときだけ `--root` を使う（[references/dashboard.md](references/dashboard.md) §2）。
+- **論点を手動で卒業にしたい**（「この論点は復習済みにして」「〜は演習で解けたので卒業にして」など）: 論点を題名で特定し、対象をユーザーに確認する。確認できたら、その論点に `manual_graduation`（日時と、述べられた理由。理由がなければ `null`）を書く。状態を `卒業` にして study.md を保存する（[references/study-format.md](references/study-format.md) §3）。挑戦履歴には書かない。保存後に explainer（挑戦済みの論点だけ）とダッシュボードを更新する。
+- **手動の卒業を取り消したい**（「〜を復習に戻して」など）: その論点の `manual_graduation` を取り除く。挑戦履歴から状態を再計算して保存し、explainer とダッシュボードを更新する。
 
 ## 5. ガードレール（やってはいけないこと）
 
@@ -162,7 +182,8 @@ python3 "<SKILL_DIR>/scripts/build_textbook.py" --input "<原稿>" --output "<PD
 - **同じ問題を反復しない。** 復習では挑戦履歴を確かめ、別角度判定規則に従う。
 - **`.rikai/` の外に書かない。** 資料本体と、他のファイルを変更しない。
 - **生成物を外部サービスへ公開しない。** explainer とフォームは、手元のファイルとして置く。
-- **論点 id を読者に見せない。** `topic-NNN` は照合用の内部キーであり、ターミナルの表にも explainer の本文にも出さない。
+- **論点 id を読者に見せない。** `topic-NNN` は照合用の内部キーであり、ターミナルの表・explainer の本文・ダッシュボードのどれにも出さない。
+- **手動の卒業を挑戦履歴に書かない。** 記録するのは `manual_graduation` だけである。ダッシュボードは読むだけで、study.md を書くのはこのスキルに限る。
 - **LaTeX を勝手にインストールしない。** 導入方法を伝えるところまでにとどめる。
 
 ## 6. 最終判断基準

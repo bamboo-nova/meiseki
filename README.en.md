@@ -380,6 +380,12 @@ The body of `study.md` holds a writer feedback report that aggregates the passag
 
 The writer can revise those passages with `meiseki`, then run `rikai` again to close the feedback loop.
 
+### Progress dashboard and manual graduation (since v0.10.0)
+
+`.rikai/dashboard.html` gathers the progress of every document in that folder on one page: the share of each status per document, what comes up for review next, the most misread passages (the same aggregation as the writer feedback report), a collapsible attempt history per topic, and links to the explainers. It is rebuilt after every session, and "show me my progress" rebuilds it without a quiz. It is a standalone static HTML file that makes no network requests, and the same `study.md` files always produce the same page.
+
+A topic you have mastered outside `rikai` (through exercises, say) can be graduated by asking "mark this topic as reviewed". Nothing is added to the attempt history; the topic gets a `manual_graduation` record (time and reason) in `study.md`. The dashboard and explainers show it as "Mastered (manual)", and "put it back under review" undoes it. The dashboard only reads; `rikai` is the only thing that writes `study.md`.
+
 Serving the form requires Python 3.
 
 The textbook PDF is optional and needs xelatex. Without it, quizzes, grading, and the picture notebook still work. The manuscript (`.tex`) is extended every session, so once you install xelatex the next build produces a PDF covering every topic so far. `rikai` never installs it for you.

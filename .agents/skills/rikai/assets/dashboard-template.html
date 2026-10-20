@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+/* 読むだけの進捗一覧。色は絵解きノートと同じトークンから取り、明るい面はノート、暗い面は黒板。
+   外部リソースは読み込まない。二重波括弧の差し込み口は build_dashboard.py が埋める。 */
+:root {
+  color-scheme: light dark;
+  --bg: #EFF3F8; --paper: #FFFFFF; --ink: #1B2A47; --ink-soft: #56637C; --line: #C5D0E0; --tint: #DCE6F5;
+  --marker: #FFD84A; --blue: #2B66D9;
+  --ok: #1F9D6B; --ok-bg: #D9F2E5; --ok-ink: #0E6541;
+  --ng: #DD4F38; --ng-bg: #FBE2DC; --ng-ink: #A22E1B;
+  --re: #8A94A6; --re-bg: #E6EAF0; --re-ink: #4C566A;
+  --display: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --body: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13201B; --paper: #1B2C25; --ink: #EEF3EA; --ink-soft: #A8B8AD; --line: #3B5046; --tint: #2A4136;
+    --marker: #F2CF4B; --blue: #86B6FF;
+    --ok: #6FD3A3; --ok-bg: #1E3F31; --ok-ink: #9BE8C2;
+    --ng: #FF8E7A; --ng-bg: #4A261E; --ng-ink: #FFB0A1;
+    --re: #7E8C84; --re-bg: #26332D; --re-ink: #B5C2BA;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 960px; margin-inline: auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 36px; }
+.wrap > * { min-width: 0; }
+h1, h2, h3, h4, p, ol, ul, blockquote { margin: 0; }
+a { color: var(--blue); }
+a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+.top { display: grid; gap: 12px; }
+.eyebrow { font-size: 13px; color: var(--ink-soft); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(28px, 6vw, 40px); line-height: 1.25; }
+.lead { font-size: 16px; max-width: 40em; color: var(--ink-soft); }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.stat { background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
+.stat b { font-family: var(--display); font-weight: 900; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--ink-soft); }
+.stat.ok b { color: var(--ok-ink); }
+.stat.ng b { color: var(--ng-ink); }
+.stat.re b { color: var(--re-ink); }
+
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.4; }
+.docs { display: grid; gap: 18px; }
+.doc { background: var(--paper); border: 2px solid var(--line); border-radius: 18px; padding: 20px 22px; display: grid; gap: 12px; }
+.doc > * { min-width: 0; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; }
+h4 { font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--ink-soft); letter-spacing: 0.06em; padding-top: 6px; }
+.bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--re-bg); }
+.bar span { display: block; height: 100%; }
+.bar .ok { background: var(--ok); }
+.bar .ng { background: var(--ng); }
+.bar .re { background: var(--re); }
+.counts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--ink-soft); }
+.counts b { color: var(--ink); font-family: var(--display); font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot.ok { background: var(--ok); }
+.dot.ng { background: var(--ng); }
+.dot.re { background: var(--re); }
+.meta { font-size: 14px; color: var(--ink-soft); }
+.muted { font-size: 14px; color: var(--ink-soft); }
+.doc ol { padding-left: 1.4em; display: grid; gap: 6px; }
+.misread li { display: grid; gap: 2px; }
+.misread li > * { min-width: 0; }
+.chip { display: inline-block; justify-self: start; font-family: var(--display); font-weight: 700; font-size: 12px; padding: 1px 10px; border-radius: 999px; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.chip.ng { background: var(--ng-bg); color: var(--ng-ink); }
+.chip.re { background: var(--re-bg); color: var(--re-ink); }
+.titles { font-weight: 700; }
+.path { font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+blockquote { font-size: 14px; color: var(--ink-soft); border-left: 3px solid var(--line); padding-left: 10px; line-height: 1.6; }
+.links { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; padding-top: 4px; }
+/* 論点ごとの記録。JavaScript を使わず details/summary で折りたたむ */
+.record { border-top: 2px dashed var(--line); padding-top: 12px; }
+.record > summary { cursor: pointer; font-family: var(--display); font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.record > summary .hint { font-weight: 400; color: var(--ink-soft); }
+.topics { list-style: none; padding: 0; margin-top: 10px; display: grid; gap: 6px; }
+.topics details { background: var(--tint); border-radius: 12px; padding: 8px 12px; }
+.topics summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 15px; }
+.topics summary b { font-family: var(--display); font-weight: 700; }
+.tally { font-size: 13px; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
+.rbody { display: grid; gap: 6px; padding-top: 8px; }
+.attempts { padding-left: 1.2em; display: grid; gap: 4px; font-size: 14px; }
+.attempts li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
+.attempts .when { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+.attempts .question { flex-basis: 100%; }
+.error { background: var(--ng-bg); color: var(--ng-ink); border-radius: 12px; padding: 10px 14px; font-size: 14px; overflow-wrap: anywhere; }
+
+.manual { list-style: none; padding: 0; display: grid; gap: 10px; }
+.manual li { background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 12px 16px; display: grid; gap: 2px; }
+.manual b { font-family: var(--display); }
+.reason { font-size: 14px; color: var(--ink-soft); }
+
+footer { font-size: 13px; color: var(--ink-soft); line-height: 1.8; border-top: 2px dashed var(--line); padding-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">{{EYEBROW}}</p>
+  <h1>{{TITLE}}</h1>
+  <p class="lead">{{LEAD}}</p>
+</header>
+{{SUMMARY}}
+<section>
+  <h2>{{DOCS_HEADING}}</h2>
+  <div class="docs">
+{{DOCS}}
+  </div>
+</section>
+<section>
+  <h2>{{MANUAL_HEADING}}</h2>
+  <p class="lead">{{MANUAL_LEAD}}</p>
+{{MANUAL}}
+</section>
+<footer>
+  <p>{{FOOTER}}</p>
+</footer>
+</div>
+</body>
+</html>

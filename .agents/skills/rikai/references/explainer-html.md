@@ -62,7 +62,7 @@ eli5 スキルが使える環境では、その流儀（大きな絵、少ない
 | 部品 | 規則 |
 |---|---|
 | `.qno` | 論点が属する見出し（`heading_path` のうち節の題） |
-| `.chip` | 状態。卒業は `chip ok`、復習中は `chip ng` |
+| `.chip` | 状態。卒業は `chip ok`、復習中は `chip ng`。`manual_graduation` による卒業は `chip ok` のまま、文言を「卒業（手動）」にする |
 | `h2` | 論点を問いの形か短い題で書く |
 | `.pic` | 大きな絵を 1 枚。必ず置く |
 | `.hitokoto` | 1〜2 文のたとえ。いちばん覚えてほしい語句を `mark` で 1 か所だけ囲む |
@@ -163,6 +163,7 @@ eli5 スキルが使える環境では、その流儀（大きな絵、少ない
 | 論点に挑戦済み | topics attempted |
 | 復習中 | Reviewing |
 | 卒業 | Mastered |
+| 卒業（手動） | Mastered (manual) |
 | きちんと言うと | Precisely |
 | 迷いどころ | Where it gets confusing |
 | 教科書の言葉 | In the source's words |

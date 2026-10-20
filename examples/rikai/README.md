@@ -8,6 +8,7 @@
 | `.rikai/sample-doc.study.md` | 数セッション分の学習履歴 | 3 状態、別角度の再出題、誤答後の次セッションでの再挑戦、還流レポート |
 | `.rikai/sample-doc.explainer.html` | 絵解きノート | 挑戦済みの論点を、大きな絵とひとことのたとえで振り返る。単体で開ける |
 | `.rikai/sample-doc.explainer.pdf` | テキストブック | 定義と例題で細部を詰める。原稿は `sample-doc.explainer.tex` |
+| `.rikai/dashboard.html` | 進捗ダッシュボード | フォルダ内の全資料の状態・次回の復習対象・誤読の多い段落を 1 枚に集計。`study.md` から機械的に生成 |
 
 ## 抽出した論点
 

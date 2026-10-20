@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学習進捗ダッシュボード</title>
+<style>
+/* 読むだけの進捗一覧。色は絵解きノートと同じトークンから取り、明るい面はノート、暗い面は黒板。
+   外部リソースは読み込まない。二重波括弧の差し込み口は build_dashboard.py が埋める。 */
+:root {
+  color-scheme: light dark;
+  --bg: #EFF3F8; --paper: #FFFFFF; --ink: #1B2A47; --ink-soft: #56637C; --line: #C5D0E0; --tint: #DCE6F5;
+  --marker: #FFD84A; --blue: #2B66D9;
+  --ok: #1F9D6B; --ok-bg: #D9F2E5; --ok-ink: #0E6541;
+  --ng: #DD4F38; --ng-bg: #FBE2DC; --ng-ink: #A22E1B;
+  --re: #8A94A6; --re-bg: #E6EAF0; --re-ink: #4C566A;
+  --display: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --body: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13201B; --paper: #1B2C25; --ink: #EEF3EA; --ink-soft: #A8B8AD; --line: #3B5046; --tint: #2A4136;
+    --marker: #F2CF4B; --blue: #86B6FF;
+    --ok: #6FD3A3; --ok-bg: #1E3F31; --ok-ink: #9BE8C2;
+    --ng: #FF8E7A; --ng-bg: #4A261E; --ng-ink: #FFB0A1;
+    --re: #7E8C84; --re-bg: #26332D; --re-ink: #B5C2BA;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 960px; margin-inline: auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 36px; }
+.wrap > * { min-width: 0; }
+h1, h2, h3, h4, p, ol, ul, blockquote { margin: 0; }
+a { color: var(--blue); }
+a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+.top { display: grid; gap: 12px; }
+.eyebrow { font-size: 13px; color: var(--ink-soft); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(28px, 6vw, 40px); line-height: 1.25; }
+.lead { font-size: 16px; max-width: 40em; color: var(--ink-soft); }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.stat { background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
+.stat b { font-family: var(--display); font-weight: 900; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--ink-soft); }
+.stat.ok b { color: var(--ok-ink); }
+.stat.ng b { color: var(--ng-ink); }
+.stat.re b { color: var(--re-ink); }
+
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.4; }
+.docs { display: grid; gap: 18px; }
+.doc { background: var(--paper); border: 2px solid var(--line); border-radius: 18px; padding: 20px 22px; display: grid; gap: 12px; }
+.doc > * { min-width: 0; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; }
+h4 { font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--ink-soft); letter-spacing: 0.06em; padding-top: 6px; }
+.bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--re-bg); }
+.bar span { display: block; height: 100%; }
+.bar .ok { background: var(--ok); }
+.bar .ng { background: var(--ng); }
+.bar .re { background: var(--re); }
+.counts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--ink-soft); }
+.counts b { color: var(--ink); font-family: var(--display); font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot.ok { background: var(--ok); }
+.dot.ng { background: var(--ng); }
+.dot.re { background: var(--re); }
+.meta { font-size: 14px; color: var(--ink-soft); }
+.muted { font-size: 14px; color: var(--ink-soft); }
+.doc ol { padding-left: 1.4em; display: grid; gap: 6px; }
+.misread li { display: grid; gap: 2px; }
+.misread li > * { min-width: 0; }
+.chip { display: inline-block; justify-self: start; font-family: var(--display); font-weight: 700; font-size: 12px; padding: 1px 10px; border-radius: 999px; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.chip.ng { background: var(--ng-bg); color: var(--ng-ink); }
+.chip.re { background: var(--re-bg); color: var(--re-ink); }
+.titles { font-weight: 700; }
+.path { font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+blockquote { font-size: 14px; color: var(--ink-soft); border-left: 3px solid var(--line); padding-left: 10px; line-height: 1.6; }
+.links { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; padding-top: 4px; }
+/* 論点ごとの記録。JavaScript を使わず details/summary で折りたたむ */
+.record { border-top: 2px dashed var(--line); padding-top: 12px; }
+.record > summary { cursor: pointer; font-family: var(--display); font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.record > summary .hint { font-weight: 400; color: var(--ink-soft); }
+.topics { list-style: none; padding: 0; margin-top: 10px; display: grid; gap: 6px; }
+.topics details { background: var(--tint); border-radius: 12px; padding: 8px 12px; }
+.topics summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 15px; }
+.topics summary b { font-family: var(--display); font-weight: 700; }
+.tally { font-size: 13px; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
+.rbody { display: grid; gap: 6px; padding-top: 8px; }
+.attempts { padding-left: 1.2em; display: grid; gap: 4px; font-size: 14px; }
+.attempts li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
+.attempts .when { font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+.attempts .question { flex-basis: 100%; }
+.error { background: var(--ng-bg); color: var(--ng-ink); border-radius: 12px; padding: 10px 14px; font-size: 14px; overflow-wrap: anywhere; }
+
+.manual { list-style: none; padding: 0; display: grid; gap: 10px; }
+.manual li { background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 12px 16px; display: grid; gap: 2px; }
+.manual b { font-family: var(--display); }
+.reason { font-size: 14px; color: var(--ink-soft); }
+
+footer { font-size: 13px; color: var(--ink-soft); line-height: 1.8; border-top: 2px dashed var(--line); padding-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">rikai ／ 最新の挑戦 2026-09-21 09:00</p>
+  <h1>学習進捗ダッシュボード</h1>
+  <p class="lead">この .rikai フォルダにある資料の学習状態を、study.md から集計したものです。解説は各資料の絵解きノートとテキストブックにあります。</p>
+</header>
+<section class="summary"><div class="stat"><b>1</b><span>資料</span></div><div class="stat"><b>8</b><span>論点</span></div><div class="stat ok"><b>4</b><span>卒業</span></div><div class="stat ng"><b>3</b><span>復習中</span></div><div class="stat re"><b>1</b><span>要再抽出</span></div></section>
+<section>
+  <h2>資料ごとの進捗</h2>
+  <div class="docs">
+<article class="doc"><h3>sample-doc</h3><div class="bar" aria-hidden="true"><span class="ok" style="width:50.0%"></span><span class="ng" style="width:37.5%"></span><span class="re" style="width:12.5%"></span></div><ul class="counts"><li><span class="dot ok"></span>卒業 <b>4</b></li><li><span class="dot ng"></span>復習中 <b>3</b></li><li><span class="dot re"></span>要再抽出 <b>1</b></li><li class="total">論点 <b>8</b></li></ul><p class="meta">挑戦済み 8 / 8 論点 ／ 最新の挑戦: 2026-09-21 09:00</p><h4>次回の復習対象</h4><ol><li>再送対象の判定（502/503/タイムアウト）</li><li>一意キーと重複の防止</li><li>完了判定と保存失敗</li></ol><h4>誤読の多い段落</h4><ol class="misread"><li><span class="chip ng">誤答 2 回</span> <span class="titles">再送対象の判定（502/503/タイムアウト）</span><span class="path">通知配信ワーカーの再送設計 › 3. 再送 › 3.1 再送の対象</span><blockquote>外部 API が `502` または `503` を返した場合と、接続がタイムアウトした場合は再送する。</blockquote></li><li><span class="chip ng">誤答 1 回</span> <span class="titles">配信順序は保証されない</span><span class="path">通知配信ワーカーの再送設計 › 2. 受付 › 2.2 配信順序</span><blockquote>ワーカーは同じ利用者へのジョブを受付順に保存するが、配信の完了順は保証しない。</blockquote></li><li><span class="chip ng">誤答 1 回</span> <span class="titles">完了判定と保存失敗</span><span class="path">通知配信ワーカーの再送設計 › 4. 完了と停止 › 4.1 完了の判定</span><blockquote>外部 API が成功応答を返し、その応答 ID を配信記録へ保存できた時点で、ジョブを完了とする。</blockquote></li><li><span class="chip ng">誤答 1 回</span> <span class="titles">一意キーと重複の防止</span><span class="path">通知配信ワーカーの再送設計 › 2. 受付 › 2.1 重複の防止</span><blockquote>送信要求には、呼び出し元が利用者 ID と通知種別から作った一意キーを付ける。</blockquote></li><li><span class="chip ng">誤答 1 回</span> <span class="titles">旧版・保守時間（アンカー切れ）</span><span class="path">通知配信ワーカーの再送設計 › 5. 保守時間</span><blockquote>毎日 2 時から 3 時までは新しい配信を受け付けない。</blockquote></li></ol><details class="record"><summary><b>論点ごとの記録</b><span class="hint">（8 論点。開くと挑戦履歴）</span></summary><ul class="topics"><li><details><summary><span class="chip ng">復習中</span> <b>一意キーと重複の防止</b> <span class="tally">正解 2・誤答 1</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-18 09:00</span> <span class="chip ng">誤答</span> <span class="path">主張の識別</span><span class="question">同じ一意キーを持つ送信要求を再度受け付けたとき、ワーカーはどうしますか。</span></li><li><span class="when">2026-09-19 09:00</span> <span class="chip ok">正解</span> <span class="path">具体例への適用</span><span class="question">一意キー `K1` の要求が受理済みで、同じ `K1` の要求が届きました。原文に合う結果はどれですか。</span></li><li><span class="when">2026-09-20 09:00</span> <span class="chip ok">正解</span> <span class="path">前提条件</span><span class="question">重複防止の規則を働かせるために、呼び出し元が満たす必要がある条件はどれですか。</span></li></ol></div></details></li><li><details><summary><span class="chip ok">卒業</span> <b>配信順序は保証されない</b> <span class="tally">正解 3・誤答 1</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-18 09:05</span> <span class="chip ok">正解</span> <span class="path">主張の識別</span><span class="question">同じ利用者へのジョブについて、保証される順序はどれですか。</span></li><li><span class="when">2026-09-19 09:10</span> <span class="chip ng">誤答</span> <span class="path">例外を生む条件</span><span class="question">後から受け付けたジョブが先に完了し得るのは、どのような場合ですか。</span></li><li><span class="when">2026-09-20 09:10</span> <span class="chip ok">正解</span> <span class="path">具体例への適用</span><span class="question">ジョブ A の後にジョブ B を受け付け、A だけが再送待ちになりました。原文で許容される結果はどれですか。</span></li><li><span class="when">2026-09-21 09:00</span> <span class="chip ok">正解</span> <span class="path">誤った一般化の判別</span><span class="question">原文の保証範囲を広げすぎている説明はどれですか。</span></li></ol></div></details></li><li><details><summary><span class="chip ng">復習中</span> <b>再送対象の判定（502/503/タイムアウト）</b> <span class="tally">正解 1・誤答 2</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-18 09:10</span> <span class="chip ng">誤答</span> <span class="path">主張の識別</span><span class="question">一時的な失敗として再送する組み合わせはどれですか。</span></li><li><span class="when">2026-09-19 09:20</span> <span class="chip ok">正解</span> <span class="path">具体例への適用</span><span class="question">外部 API への接続がタイムアウトしました。ワーカーの次の処理として原文に合うものはどれですか。</span></li><li><span class="when">2026-09-20 09:20</span> <span class="chip ng">誤答</span> <span class="path">因果関係</span><span class="question">`503` 応答を受けたときの失敗分類と処理の関係はどれですか。</span></li></ol></div></details></li><li><details><summary><span class="chip ok">卒業</span> <b>429 は「再送しない」の例外</b> <span class="tally">正解 1・誤答 0</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-19 09:40</span> <span class="chip ok">正解</span> <span class="path">例外条件</span><span class="question">`4xx` 応答のうち、再送しないという通常則の例外はどれですか。</span></li></ol></div></details></li><li><details><summary><span class="chip ok">卒業</span> <b>試行上限と失敗キュー</b> <span class="tally">正解 1・誤答 0</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-18 09:15</span> <span class="chip ok">正解</span> <span class="path">手順の順序</span><span class="question">最初の三回の再送前に使う待機時間の順序はどれですか。</span></li></ol></div></details></li><li><details><summary><span class="chip ng">復習中</span> <b>完了判定と保存失敗</b> <span class="tally">正解 1・誤答 1</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-18 09:20</span> <span class="chip ng">誤答</span> <span class="path">完了条件</span><span class="question">ジョブを完了とするために必要な組み合わせはどれですか。</span></li><li><span class="when">2026-09-19 09:30</span> <span class="chip ok">正解</span> <span class="path">例外への適用</span><span class="question">成功応答の受信後に応答 ID の保存へ失敗しました。このジョブの状態はどうなりますか。</span></li></ol></div></details></li><li><details><summary><span class="chip ok">卒業</span> <b>緊急停止の例外</b> <span class="tally">正解 1・誤答 0</span></summary><div class="rbody"><ol class="attempts"><li><span class="when">2026-09-20 09:40</span> <span class="chip ok">正解</span> <span class="path">停止時の手順</span><span class="question">通常の運用停止時、すでに外部 API へ送信中の要求をどう扱いますか。</span></li></ol></div></details></li><li><details><summary><span class="chip re">要再抽出</span> <b>旧版・保守時間（アンカー切れ）</b> <span class="tally">正解 0・誤答 1</span></summary><div class="rbody"><p class="meta">原文に根拠の段落が見つからないため、出題対象外です。</p><ol class="attempts"><li><span class="when">2026-09-17 15:00</span> <span class="chip ng">誤答</span> <span class="path">適用条件</span><span class="question">保守時間中の新しい配信要求はどう扱いますか。</span></li></ol></div></details></li></ul></details><p class="links"><a href="sample-doc.explainer.html">絵解きノート</a> <a href="sample-doc.explainer.pdf">テキストブック</a> <a href="sample-doc.study.md">study.md（生データ）</a></p></article>
+  </div>
+</section>
+<section>
+  <h2>手動で卒業にした論点</h2>
+  <p class="lead">出題に正答したのではなく、「復習済みにして」の指示で卒業にした論点です。</p>
+<p class="muted">ありません。</p>
+</section>
+<footer>
+  <p>状態の正本は各 study.md の frontmatter です。この画面は読むだけで、何も書き換えません。論点を手動で卒業にしたいときは、rikai スキルに「この論点は復習済みにして」と頼んでください。</p>
+</footer>
+</div>
+</body>
+</html>

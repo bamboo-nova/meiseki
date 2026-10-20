@@ -29,7 +29,7 @@
 - `\rikaititle` の第 1 引数は資料名、第 2 引数は最終更新日である。更新のたびに日付を書き換える。
 - `\section` には、文書の題のすぐ下の階層の見出しを、番号も含めてそのまま書く（例 `\section{2. 受付}`）。見出しの番号は LaTeX に付けさせない。資料に出てくる順に並べる。
 - 論点 1 つは、`% >>> topic-NNN` と `% <<< topic-NNN` のコメント行で挟む。書き足しと差し替えは、この範囲を単位に行う。論点 id はこのコメントにだけ書き、読者に見える本文には書かない。
-- `\topic{題名}{状態}` の状態は `復習中` か `卒業` である（日本語以外の言語では §8 の訳語）。
+- `\topic{題名}{状態}` の状態は `復習中` か `卒業` である（日本語以外の言語では §8 の訳語）。`manual_graduation` による卒業は `卒業（手動）` と書く。
 
 ## 3. 論点 1 つの書き方
 
@@ -194,7 +194,7 @@ python3 "<SKILL_DIR>/scripts/build_textbook.py" --input "<原稿>" --output "<PD
 | `\rikaiLabelStatusSep` | ： | `: `（コロンと空白） | 状態の文言と値の間 |
 | `\rikaiLabelDisclaimer` | 事実の根拠は資料の原文です。例題の数値・名前・場面には、説明のために足したものがあります。 | Facts are based on the source text. Some numbers, names and situations in the examples were added for explanation. | 題の下の注記 |
 
-ほかの文言も、その言語で書く。study.md の論点の題名が原稿の言語と違う言語で書かれていれば、`\topic` には訳して書く。study.md の値は書き換えない。`\topic` の状態は study.md の値（`復習中`、`卒業`）を訳して書く（英語なら `Reviewing`、`Mastered`）。`\rikaititle` の日付と、原文にない例題の題に添える「（説明用）」も、その言語で書く（英語なら `October 4, 2026`、`(for illustration)`）。
+ほかの文言も、その言語で書く。study.md の論点の題名が原稿の言語と違う言語で書かれていれば、`\topic` には訳して書く。study.md の値は書き換えない。`\topic` の状態は study.md の値（`復習中`、`卒業`）を訳して書く（英語なら `Reviewing`、`Mastered`。手動の卒業は `Mastered (manual)`）。`\rikaititle` の日付と、原文にない例題の題に添える「（説明用）」も、その言語で書く（英語なら `October 4, 2026`、`(for illustration)`）。
 
 フォントは、日本語とラテン文字の言語（英語、フランス語、ポルトガル語など）なら既定のままでよい。ほかの文字を使う言語（ハングル、簡体字など）では、その文字を持つフォントを `\usepackage` の前に指定する。指定しないと、文字が PDF に出ず、ビルドが §5 の警告を出す。
 

@@ -15,7 +15,7 @@ def read(*parts):
 
 class TemplateTest(unittest.TestCase):
     def test_templates_load_nothing_external(self):
-        for name in ("quiz-template.html", "explainer-template.html"):
+        for name in ("quiz-template.html", "explainer-template.html", "dashboard-template.html"):
             with self.subTest(name=name):
                 self.assertIsNone(EXTERNAL.search(read("assets", name)))
 
@@ -62,11 +62,13 @@ class SkillDocsTest(unittest.TestCase):
             "scripts/build_quiz.py",
             "scripts/quiz_server.py",
             "scripts/build_textbook.py",
+            "scripts/build_dashboard.py",
             "references/question-design.md",
             "references/study-format.md",
             "references/quiz-format.md",
             "references/explainer-html.md",
             "references/explainer-textbook.md",
+            "references/dashboard.md",
         ):
             with self.subTest(name=name):
                 self.assertIn(name, skill)

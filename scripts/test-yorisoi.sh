@@ -23,9 +23,9 @@ trap cleanup EXIT
 CONFIG=.agents/skills/yorisoi/references/textlint-yorisoi.config.json
 lint() {
   npx --min-release-age=7 --yes \
-    --package textlint@14.8.4 \
-    --package textlint-rule-preset-ja-technical-writing@10.0.2 \
-    --package textlint-rule-prh@6.1.0 \
+    --package textlint@15.8.0 \
+    --package textlint-rule-preset-ja-technical-writing@12.0.2 \
+    --package textlint-rule-prh@6.1.1 \
     textlint -c "$CONFIG" -f json "$1" 2>/dev/null
 }
 vocab() { node scripts/yorisoi-vocab-check.js --level "${2:-N4}" --format json "$1"; }
@@ -119,7 +119,7 @@ done
 # lint-core のルールセット差し替え(環境変数)で yorisoi 構成が動く
 RC=0
 MEISEKI_LINT_CONFIG="$CONFIG" \
-MEISEKI_LINT_PACKAGES="textlint@14.8.4 textlint-rule-preset-ja-technical-writing@10.0.2 textlint-rule-prh@6.1.0" \
+MEISEKI_LINT_PACKAGES="textlint@15.8.0 textlint-rule-preset-ja-technical-writing@12.0.2 textlint-rule-prh@6.1.1" \
 bash scripts/meiseki-lint-core.sh "$TESTDIR/viol.md" >/dev/null || RC=$?
 assert_eq "lint-core を yorisoi 構成で実行すると block(rc=1)" "1" "$RC"
 

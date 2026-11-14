@@ -60,7 +60,7 @@ yorisoi は目標語彙レベル（既定 N4 相当）の読者が理解でき�
 原稿を一時ファイル（拡張子 `.md`）に書き出し、`npx` 経由で textlint を実行して JSON を読む。
 
 ```bash
-npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-prh@6.1.0 textlint -c "<SKILL_DIR>/references/textlint-yorisoi.config.json" -f json "<INPUT_MD>"
+npx --min-release-age=7 --yes --package textlint@15.8.0 --package textlint-rule-preset-ja-technical-writing@12.0.2 --package textlint-rule-prh@6.1.1 textlint -c "<SKILL_DIR>/references/textlint-yorisoi.config.json" -f json "<INPUT_MD>"
 ```
 
 - `<SKILL_DIR>` はこの `SKILL.md` があるディレクトリの実パスに置き換える。

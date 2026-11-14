@@ -72,7 +72,7 @@ CONFIG="${MEISEKI_LINT_CONFIG:-$CORE_DIR/../.agents/skills/meiseki/references/te
 [ -f "$CONFIG" ] || exit 2
 
 # ルールセット差し替え用の環境変数(既定は meiseki 本体の構成)
-PACKAGES="${MEISEKI_LINT_PACKAGES:-textlint@14.8.4 textlint-rule-preset-ja-technical-writing@10.0.2 textlint-rule-preset-ai-writing@1.1.0 textlint-rule-prh@6.1.0}"
+PACKAGES="${MEISEKI_LINT_PACKAGES:-textlint@15.8.0 textlint-rule-preset-ja-technical-writing@12.0.2 textlint-rule-preset-ai-writing@1.1.0 textlint-rule-prh@6.1.1}"
 PRIMARY_RULE="${MEISEKI_LINT_PRIMARY_RULE:-no-double-negative-ja}"
 PRIMARY_MAX="${MEISEKI_LINT_PRIMARY_MAX:-0}"
 TOTAL_MAX="${MEISEKI_LINT_TOTAL_MAX:-3}"

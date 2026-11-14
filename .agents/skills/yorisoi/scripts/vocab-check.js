@@ -30,7 +30,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { createRequire } = require('module');
 
-const KUROMOJIN_VERSION = '3.0.0';
+const KUROMOJIN_VERSION = '3.0.1';
 
 // ---- 引数 ----
 const args = process.argv.slice(2);

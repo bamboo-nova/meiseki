@@ -45,7 +45,7 @@ description: >
 
 ```bash
 # textlint を JSON フォーマットで実行（Skill 同梱の設定を使う）
-npx --min-release-age=7 --yes --package textlint@14.8.4 --package textlint-rule-preset-ja-technical-writing@10.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.0 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
+npx --min-release-age=7 --yes --package textlint@15.8.0 --package textlint-rule-preset-ja-technical-writing@12.0.2 --package textlint-rule-preset-ai-writing@1.1.0 --package textlint-rule-prh@6.1.1 textlint -c "<SKILL_DIR>/references/textlint.config.json" -f json "<INPUT_MD>"
 ```
 
 - `<SKILL_DIR>` はこの `SKILL.md` があるディレクトリの実パスに置き換える。
@@ -64,7 +64,7 @@ I はリライト対象ではなく、Step 8 で報告してユーザーに対�
 
 ```bash
 # markdownlint を実行（Skill 同梱の設定を使う。Markdown 構文のリグレッションガード）
-npx --min-release-age=7 --yes --package markdownlint-cli@0.49.1 markdownlint --config "<SKILL_DIR>/references/markdownlint.config.jsonc" "<INPUT_MD>"
+npx --min-release-age=7 --yes --package markdownlint-cli@0.50.0 markdownlint --config "<SKILL_DIR>/references/markdownlint.config.jsonc" "<INPUT_MD>"
 ```
 
 - textlint 用のマスキング（コードブロック除去等）は適用しない。markdownlint は生の Markdown 構造そのものを検査する。

@@ -1,6 +1,6 @@
 {
   "name": "meiseki",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "private": true,
   "description": "日本語ドキュメントの読解負荷を textlint で検出し、明晰さだけを目的にリライトする Agent Skill の決定論層。",
   "scripts": {
@@ -11,6 +11,9 @@
     "test:hook": "bash scripts/test-meiseki-check.sh",
     "test:yorisoi": "bash scripts/test-yorisoi.sh",
     "test:rikai": "python3 -m unittest discover -s scripts/tests -p 'test_rikai_*.py' -v",
+    "check:meaning": "node scripts/meiseki-invariants.js",
+    "test:meaning": "node scripts/test-meaning.js",
+    "bench:meaning": "node scripts/bench-meaning.js",
     "bench:jev": "node scripts/bench-jev.js",
     "jev:setup": "node scripts/jev-judge.js --setup",
     "jev:check": "node scripts/jev-judge.js --check"

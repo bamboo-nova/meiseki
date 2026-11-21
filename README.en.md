@@ -142,11 +142,13 @@ flowchart TD
     JEV -->|Confident answers settle here| LLM
     JEV -.->|Uncertain / no key / failure| LLM
     LLM["(3) LLM<br/>rewrite layer (A–H)"]
-    LLM --> V["Re-run textlint<br/>verify before→after"]
+    LLM --> MC["(4) Meaning check<br/>count markers before/after (deterministic)"]
+    MC -->|no risk| V["Re-run textlint<br/>verify before→after"]
+    MC -.->|"risk: fix once<br/>else restore original"| V
     V --> OUT([Output: clarified body only])
 ```
 
-Layer roles: (1) detects double negatives, sentence length, redundancy, and LLM boilerplate with line/column info and produces RLS (before). (2) bundles the findings that need contextual judgment (G boilerplate substance / H paragraph repetition / A litotes) into one request and answers them instantly as yes/no probabilities. (3) handles the remaining judgments plus the rewrite itself.
+Layer roles: (1) detects double negatives, sentence length, redundancy, and LLM boilerplate with line/column info and produces RLS (before). (2) bundles the findings that need contextual judgment (G boilerplate substance / H paragraph repetition / A litotes) into one request and answers them instantly as yes/no probabilities. (3) handles the remaining judgments plus the rewrite itself. (4) counts markers such as numbers, negations, conditions, and certainty before and after the rewrite, and finds paragraphs whose meaning may have changed (see [Meaning check](#meaning-check-since-v0110) below).
 
 - **Detection and scoring belong to textlint (deterministic layer)**; **rewriting belongs to the LLM layer** — unchanged since the first release.
 - The v0.9.0 Jev layer takes over **only the contextual judgments** the LLM used to spend time on.
@@ -180,6 +182,34 @@ Also since v0.7.0, mojibake is detected (category I: NFD-decomposed kana, contro
 zero-width spaces, garbled half-width katakana, U+FFFD). These are reported instead of rewritten, and the user decides how
 to handle them — control characters can be intentional, and U+FFFD marks a character whose
 original is lost, so guessing a replacement would fabricate meaning.
+
+### Meaning check (since v0.11.0)
+
+A bundled script mechanically compares the text before and after the rewrite to confirm that nothing that must stay the same has changed. Having the rewriting LLM re-read its own output gives no way to notice what it missed. The most serious failure is flipping the logic when folding a double negative (`「影響がないとは言えません」` "it cannot be said there is no impact" → `「影響しません」` "there is no impact").
+
+| Compared | Flagged as a risk when |
+|---|---|
+| Protected regions (code, quotes, math, URLs) | even one character changes |
+| Numbers, identifiers (API and function names), terms in 「」 | they disappear from the whole document, or ones absent from the original appear |
+| Number of negations | the change within a paragraph is odd (folding a double negative correctly removes them in pairs, so an even decrease is treated as a fold) |
+| Condition / exception / limitation markers (`場合`, `ただし`, `のみ`, …) | they decrease within a paragraph |
+| Certainty / obligation / universal / partial markers (`ことがある`, `べき`, `常に`, `一部`, …) | they decrease within a paragraph (e.g. a hedge `ことがある` turned into an assertion `する`) |
+
+- Markers are counted by class, so paraphrases and inflections collapse together: `ことがある`, `こともある`, and `場合がある` each count as one "possibility" marker
+- Paragraphs are aligned by character overlap. meiseki splits and merges sentences and deletes paragraphs, so comparison is per paragraph, not per sentence
+- For a flagged paragraph, the LLM makes one fix and the check runs again. If the risk remains, the script restores that paragraph to the original. This enforces the guardrail "leave text in its original form when it cannot be fixed without changing its meaning"
+- The script only reports marker changes; it does not decide whether meaning was preserved. No findings does not mean a pass, so the LLM's own checks still follow
+- Run time grows roughly linearly with length: about 0.1 s for 25,000 characters and about 0.9 s for 250,000 characters (measured on an Apple M1). At every size it stays under 5% of one textlint run, so the overall rewrite speed barely changes. The method and raw data are in `experiments/meaning-benchmark/` (re-measure with `npm run bench:meaning`)
+- No dependencies and no network, so it behaves the same on every host. Where `node` is unavailable, the mechanical check is skipped and only the LLM checks run (fail-open, like textlint)
+
+To run it by hand (exit codes: 0 = no risk, 1 = risk, 2 = cannot judge, 3 = out of scope, i.e. no Japanese):
+
+```bash
+npm run check:meaning -- --before before.md --after after.md          # show findings
+npm run check:meaning -- --before before.md --after after.md --json   # JSON output
+npm run check:meaning -- --before before.md --after after.md --revert-risky --out final.md   # restore flagged paragraphs
+npm run test:meaning   # tests: 10 meaning-preserving pairs, 7 kinds of meaning changes, and more (examples in examples/meaning/)
+```
 
 ### Jev fast-decision layer (since v0.9.0)
 
@@ -220,12 +250,12 @@ It is used in two places: meiseki's pre-rewrite contextual judgments (the 8 ques
   - Whichever you choose, verify with `npm run jev:check`. Without a key, the Jev layer is skipped automatically and everything works as before
 - The auto-apply hook never uses Jev (it stays fully offline)
 
-On data transmission and privacy: enabling Jev sends the text under judgment to TypeSafe's servers. meiseki sends only excerpts of the flagged sentences/paragraphs plus the questions. yorisoi's document-level estimate would send the first 48,000 characters of the document (effectively the whole thing), so **it stays disabled by default even with a key configured** — the skill asks for your consent first and runs it only when you agree (ask-by-default opt-in). TypeSafe states it does not train on customer data, but **standard accounts are not ZDR (zero data retention)** — requests may be kept for some period for operations, abuse prevention, or debugging (ZDR is enterprise-only; see [TypeSafe's legal docs](https://docs.typesafe.ai/legal)).
+On data transmission and privacy: enabling Jev sends the text under judgment to TypeSafe's servers. meiseki sends only excerpts of the flagged sentences/paragraphs plus the questions. yorisoi's document-level estimate would send the first 48,000 characters of the document (effectively the whole thing), so **it stays disabled by default even with a key configured** — the skill asks for your consent first and runs it only when you agree (ask-by-default opt-in). TypeSafe states it does not train on customer data, but **accounts are not ZDR (zero data retention) by default** — requests may be kept for some period for operations, abuse prevention, or debugging. Any organization can turn on ZDR for free: request it from TypeSafe support, then confirm it under Settings → Organization in the console (see [TypeSafe's ZDR article](https://help.typesafe.ai/articles/9520184411-do-you-offer-zdr)).
 
 For documents that must not leave your machine, disable Jev with any of the following. Each is a complete fallback to the previous behavior; no functionality is lost.
 
 - Put a `.meiseki-no-jev` file (empty is fine) at the project root. Ancestor directories are scanned, so this reliably stops transmission for the whole repository
-- Write a per-scope policy in the project's `.meiseki.json`, e.g. `{"jev": {"meiseki": "ask", "yorisoi": "deny"}}`. `deny` always blocks; `ask` makes the skill confirm with you each time before running (defaults: meiseki=allow, yorisoi=ask)
+- Write a per-scope policy in the project's `.meiseki.json`, e.g. `{"jev": {"meiseki": "ask", "yorisoi": "deny"}}`. `deny` always blocks; `ask` makes the skill confirm with you each time before running (defaults: meiseki=allow, yorisoi=ask). A ready-to-copy example, plus where the file is looked up, what each value means, and how to check the active policy, is in [`examples/config/`](examples/config/) (written in Japanese)
 - Set the environment variable `MEISEKI_JEV_DISABLE=1` (per session / CI)
 - Simply do not configure a key (the default state)
 - The dataset, reproduction steps, and raw results behind these numbers live in `experiments/jev-benchmark/` (re-measure any time with `npm run bench:jev`)
@@ -297,6 +327,7 @@ RLS = Σ(findings per category × weight) ÷ number of sentences in the body × 
 - [ ] **No voice or stance has been injected** (no added first-person opinions like「自分は」, no added assertive emphasis)
 - [ ] LLM boilerplate (「重要なのは〜」,「掘り下げる」, etc.) is removed (usages with real substance in context are kept)
 - [ ] Paragraph-level restatements and re-summaries are removed (claims, examples, evidence, and exceptions are not lost)
+- [ ] The meaning check leaves no risk (paragraphs that could not be fixed have been restored to the original)
 - [ ] Re-running textlint shows the reading-load score is lower than before (category A is 0)
 
 ## Plain Japanese skill `meiseki:yorisoi` (since v0.6.0)
@@ -486,12 +517,16 @@ meiseki/
 │   ├── codex-hook.sh            # Codex adapter: extracts paths from the apply_patch envelope and bridges
 │   ├── yorisoi-vocab-check.js  # Wrapper for the vocabulary-level checker (core ships inside the skill)
 │   ├── jev-judge.js             # Jev decision client (key resolution, fallback, --setup/--check)
+│   ├── meiseki-invariants.js    # Meaning-check wrapper (body ships with the skill; npm run check:meaning)
+│   ├── test-meaning.js          # Automated tests for the meaning check (npm run test:meaning)
+│   ├── bench-meaning.js         # Meaning-check run-time benchmark (npm run bench:meaning)
 │   ├── bench-jev.js             # Jev speed/agreement benchmark (npm run bench:jev)
 │   ├── test-meiseki-check.sh    # Automated tests for the hook, prh dictionary, and Jev fallback (npm run test:hook)
 │   └── test-yorisoi.sh         # Automated tests for yorisoi detection and vocabulary checks (npm run test:yorisoi)
 ├── .agents/skills/          # Standard Agent Skills location (shared by Claude Code and Codex)
 │   ├── meiseki/
 │   │   ├── SKILL.md         # LLM orchestrator for the clarity skill
+│   │   ├── scripts/meiseki-invariants.js # Meaning check (compares markers before/after, restores originals; no dependencies)
 │   │   └── references/
 │   │       ├── patterns.md             # High-load syntax catalog A–H
 │   │       ├── prh-llm-phrases.yml     # Detection dictionary for LLM boilerplate (category G, detection only)
@@ -520,11 +555,14 @@ meiseki/
 │       ├── scripts/         # build_pdf.py / svglib.py
 │       └── assets/style.tex
 ├── experiments/
-│   └── jev-benchmark/           # Jev benchmark dataset, reproduction steps, and raw measurements
+│   ├── jev-benchmark/           # Jev benchmark dataset, reproduction steps, and raw measurements
+│   └── meaning-benchmark/       # Meaning-check run-time method and raw measurements
 ├── examples/
 │   ├── meiseki/             # Clarity examples (9 before/after pairs + measured RLS)
 │   ├── yorisoi/            # Plain-Japanese examples (3 before/after pairs + measured YLS)
 │   ├── rikai/              # Example source, learning history, and explainers (picture notebook and textbook)
+│   ├── meaning/             # Meaning-check examples (7 kinds of meaning changes, a safe rewrite, restoring originals)
+│   ├── config/              # Example .meiseki.json (policy for sending text to Jev) with notes
 │   └── markdownlint/        # Markdown-syntax check examples (samples firing all 13 rules)
 ├── package.json             # Provides npm run lint / lint:yorisoi / lint:md / vocab:yorisoi / test:* for development
 └── README.md
@@ -553,7 +591,7 @@ The yorisoi skill draws on the following resources:
 - The yorisoi skill's vocabulary-level labels ("roughly N4" etc.) are **estimates based on unofficial lists** and do not match any official JLPT standard.
 - The yorisoi skill follows the official guidelines but is **not an approved or certified tool**. Simplification can alter meaning. Before publishing rewritten output as official information (administrative procedures, disaster notices, etc.), **have it reviewed by qualified staff** (Japanese-language education or multicultural affairs officers).
 - The author and rights holders accept no liability for any direct or indirect damages arising from the use of, or inability to use, this Agent Skill and plugin (see `LICENSE` for details).
-- Enabling the optional Jev fast-decision layer (since v0.9.0) transmits the text under judgment to TypeSafe's servers (excerpts of flagged passages for meiseki; for yorisoi's document-level estimate, the first 48,000 characters — and that path runs only on explicit request). TypeSafe states it does not train on customer data, but standard accounts are not ZDR and requests may be retained for operational purposes. **For documents containing confidential information, disable Jev (e.g. with a `.meiseki-no-jev` marker) before use.** Handling of transmitted data is governed by TypeSafe's terms; the author accepts no responsibility for it.
+- Enabling the optional Jev fast-decision layer (since v0.9.0) transmits the text under judgment to TypeSafe's servers (excerpts of flagged passages for meiseki; for yorisoi's document-level estimate, the first 48,000 characters — and that path runs only on explicit request). TypeSafe states it does not train on customer data, but accounts are not ZDR by default and requests may be retained for operational purposes (ZDR can be turned on for free on request). **For documents containing confidential information, disable Jev (e.g. with a `.meiseki-no-jev` marker) before use.** Handling of transmitted data is governed by TypeSafe's terms; the author accepts no responsibility for it.
 - This Agent Skill and plugin depend on third-party OSS such as textlint. The behavior and security of those dependencies are governed by their respective providers' terms and licenses.
 
 ## Acknowledgments
